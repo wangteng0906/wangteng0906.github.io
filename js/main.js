@@ -23,6 +23,14 @@ document.addEventListener('DOMContentLoaded', function () {
     adjustMenu(true)
     $nav.classList.add('show')
   }
+  // DOMContentLoaded时初始化
+  initAdjust()
+
+  // 监听窗口大小改变事件
+  window.addEventListener('resize', () => adjustMenu(false))
+  
+  // 如果使用了PJAX，监听PJAX完成事件
+  document.addEventListener('pjax:complete', initAdjust)
 
   // sidebar menus
   const sidebarFn = {
