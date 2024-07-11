@@ -4,6 +4,27 @@
   
     
     <entry>
+      <title>test</title>
+      <link href="/post/ghfdin.html"/>
+      <url>/post/ghfdin.html</url>
+      
+        <content type="html"><![CDATA[<link rel="stylesheet" class="aplayer-secondary-style-marker" href="/assets/css/APlayer.min.css"><script src="/assets/js/APlayer.min.js" class="aplayer-secondary-script-marker"></script><script class="meting-secondary-script-marker" src="/assets/js/Meting.min.js"></script>]]></content>
+      
+      
+      
+        <tags>
+            
+            <tag> Shell </tag>
+            
+            <tag> Nginx </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
       <title>Nginx之localtion规则与地址重写（超详细实例篇）</title>
       <link href="/post/006.html"/>
       <url>/post/006.html</url>
