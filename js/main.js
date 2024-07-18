@@ -32,6 +32,8 @@ document.addEventListener('DOMContentLoaded', function () {
   // 如果使用了PJAX，监听PJAX完成事件
   document.addEventListener('pjax:complete', initAdjust)
 
+
+
   // sidebar menus
   const sidebarFn = {
     open: () => {
@@ -50,6 +52,7 @@ document.addEventListener('DOMContentLoaded', function () {
       mobileSidebarOpen = false
     }
   }
+
 
   /**
    * 首頁top_img底下的箭頭
