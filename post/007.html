@@ -1,0 +1,525 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>Pulsar的消息保留和过期策略 | Bingo大侠</title><meta name="author" content="Bingo_Teng,1364695199@qq.com"><meta name="copyright" content="Bingo_Teng"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="Pulsar的消息保留和过期策略 导读 Apache Pulsar 是 Apache 软件基金会顶级项目，是下一代云原生分布式消息流平台，集消息、存储、轻量化函数式计算为一体，采用计算与存储分离架构设计，支持多租户、持久化存储、多机房跨区域数据复制，具有强一致性、高吞吐、低延时及高可扩展性等流数据存储特性。 默认情况下，Pulsar Broker 会对消息做如下处理：  列表项当消息被 Consu">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Pulsar的消息保留和过期策略">
+<meta property="og:url" content="https://blog.wangteng.space/post/007.html">
+<meta property="og:site_name" content="Bingo大侠">
+<meta property="og:description" content="Pulsar的消息保留和过期策略 导读 Apache Pulsar 是 Apache 软件基金会顶级项目，是下一代云原生分布式消息流平台，集消息、存储、轻量化函数式计算为一体，采用计算与存储分离架构设计，支持多租户、持久化存储、多机房跨区域数据复制，具有强一致性、高吞吐、低延时及高可扩展性等流数据存储特性。 默认情况下，Pulsar Broker 会对消息做如下处理：  列表项当消息被 Consu">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://cdn.jsdelivr.net/gh/wangteng0906/picture/img/202407101147226.jpeg">
+<meta property="article:published_time" content="2024-07-18T07:18:53.630Z">
+<meta property="article:modified_time" content="2024-07-19T03:50:13.518Z">
+<meta property="article:author" content="Bingo_Teng">
+<meta property="article:tag" content="Pulsar">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://cdn.jsdelivr.net/gh/wangteng0906/picture/img/202407101147226.jpeg"><link rel="shortcut icon" href="https://cdn.jsdelivr.net/gh/wangteng0906/picture/img/202407042103474.png"><link rel="canonical" href="https://blog.wangteng.space/post/007.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//hm.baidu.com"/><link rel="preconnect" href="//fonts.googleapis.com" crossorigin=""/><link rel="preconnect" href="//busuanzi.ibruce.info"/><meta name="google-site-verification" content="cXGUmZ04GXw763C3yz8N7AKcULDeZogcpuYxVuhfgN0"/><meta name="baidu-site-verification" content="codeva-XY4OGiVs6L"/><link rel="stylesheet" href="/css/index.css?v=4.14.0-b3"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0.35/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>(()=>{
+      const saveToLocal = {
+        set: (key, value, ttl) => {
+          if (ttl === 0) return
+          const now = Date.now()
+          const expiry = now + ttl * 86400000
+          const item = {
+            value,
+            expiry
+          }
+          localStorage.setItem(key, JSON.stringify(item))
+        },
+      
+        get: key => {
+          const itemStr = localStorage.getItem(key)
+      
+          if (!itemStr) {
+            return undefined
+          }
+          const item = JSON.parse(itemStr)
+          const now = Date.now()
+      
+          if (now > item.expiry) {
+            localStorage.removeItem(key)
+            return undefined
+          }
+          return item.value
+        }
+      }
+      
+      window.btf = {
+        saveToLocal: saveToLocal,
+        getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+          const script = document.createElement('script')
+          script.src = url
+          script.async = true
+          script.onerror = reject
+          script.onload = script.onreadystatechange = function() {
+            const loadState = this.readyState
+            if (loadState && loadState !== 'loaded' && loadState !== 'complete') return
+            script.onload = script.onreadystatechange = null
+            resolve()
+          }
+
+          Object.keys(attr).forEach(key => {
+            script.setAttribute(key, attr[key])
+          })
+
+          document.head.appendChild(script)
+        }),
+
+        getCSS: (url, id = false) => new Promise((resolve, reject) => {
+          const link = document.createElement('link')
+          link.rel = 'stylesheet'
+          link.href = url
+          if (id) link.id = id
+          link.onerror = reject
+          link.onload = link.onreadystatechange = function() {
+            const loadState = this.readyState
+            if (loadState && loadState !== 'loaded' && loadState !== 'complete') return
+            link.onload = link.onreadystatechange = null
+            resolve()
+          }
+          document.head.appendChild(link)
+        }),
+
+        addGlobalFn: (key, fn, name = false, parent = window) => {
+          const pjaxEnable = true
+          if (!pjaxEnable && key.startsWith('pjax')) return
+
+          const globalFn = parent.globalFn || {}
+          const keyObj = globalFn[key] || {}
+    
+          if (name && keyObj[name]) return
+    
+          name = name || Object.keys(keyObj).length
+          keyObj[name] = fn
+          globalFn[key] = keyObj
+          parent.globalFn = globalFn
+        }
+      }
+    
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+      
+      const t = saveToLocal.get('theme')
+    
+        if (t === 'dark') activateDarkMode()
+        else if (t === 'light') activateLightMode()
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        if (asideStatus === 'hide') {
+          document.documentElement.classList.add('hide-aside')
+        } else {
+          document.documentElement.classList.remove('hide-aside')
+        }
+      }
+    
+      const detectApple = () => {
+        if(/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)){
+          document.documentElement.classList.add('apple')
+        }
+      }
+      detectApple()
+    })()</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "https://hm.baidu.com/hm.js?abc12d17aaf88b289b4a545992353f24";
+  var s = document.getElementsByTagName("script")[0]; 
+  s.parentNode.insertBefore(hm, s);
+})();
+btf.addGlobalFn('pjaxComplete', () => {
+  _hmt.push(['_trackPageview',window.location.pathname])
+}, 'baidu_analytics')
+</script><link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Titillium+Web&amp;display=swap" media="print" onload="this.media='all'"><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: {"appId":"2MWYM2YI6M","apiKey":"4f970d28a5192c2c71154e54594b59a1","indexName":"search","hits":{"per_page":10},"languages":{"input_placeholder":"搜索文章","hits_empty":"找不到您查询的内容：${query}","hits_stats":"找到 ${hits} 条结果，用时 ${time} 毫秒"}},
+  localSearch: undefined,
+  translate: undefined,
+  noticeOutdate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":true,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制错误',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: true,
+    post: true
+  },
+  runtime: '天',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: {"limitCount":50,"languages":{"author":"作者: Bingo_Teng","link":"链接: ","source":"来源: Bingo大侠","info":"著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。"}},
+  lightbox: 'fancybox',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.11.1/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyload: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: true,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'Pulsar的消息保留和过期策略',
+  isPost: true,
+  isHome: false,
+  isHighlightShrink: false,
+  isToc: true,
+  postUpdate: '2024-07-19 11:50:13'
+}</script><link rel="stylesheet" href="/css/custom.css"><meta name="generator" content="Hexo 7.2.0"></head><body><div id="loading-box" onclick="document.getElementById(&quot;loading-box&quot;).classList.add(&quot;loaded&quot;)"><div class="loading-bg"><div class="loading-img"></div><div class="loading-image-dot"></div></div></div><script>const preloader = {
+  endLoading: () => {
+    document.body.style.overflow = 'auto';
+    document.getElementById('loading-box').classList.add("loaded")
+  },
+  initLoading: () => {
+    document.body.style.overflow = '';
+    document.getElementById('loading-box').classList.remove("loaded")
+
+  }
+}
+window.addEventListener('load',()=> { preloader.endLoading() })
+
+if (true) {
+  document.addEventListener('pjax:send', () => { preloader.initLoading() })
+  document.addEventListener('pjax:complete', () => { preloader.endLoading() })
+}</script><script>window.paceOptions = {
+  restartOnPushState: false
+}
+
+btf.addGlobalFn('pjaxSend', () => {
+  Pace.restart()
+}, 'pace_restart')
+
+</script><link rel="stylesheet" href="/css/progress_bar.css"/><script src="https://cdn.jsdelivr.net/npm/pace-js@1.2.4/pace.min.js"></script><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img is-center"><img src="https://cdn.jsdelivr.net/gh/wangteng0906/picture/img/202407032151846.jpg" onerror="onerror=null;src='/img/friend_404.gif'" alt="avatar"/></div><div class="sidebar-site-data site-data is-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">7</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">6</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">3</div></a></div><hr class="custom-hr"/><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-archive"></i><span> 文章</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 时间轴</span></a></li><li><a class="site-page child" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></li><li><a class="site-page child" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></li></ul></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-heartbeat"></i><span> 娱乐</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/music/"><i class="fa-fw fas fa-music"></i><span> 音乐</span></a></li><li><a class="site-page child" href="/Gallery/"><i class="fa-fw fas fa-images"></i><span> 照片</span></a></li><li><a class="site-page child" href="/movies/"><i class="fa-fw fas fa-video"></i><span> 电影</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友链</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url('https://cdn.jsdelivr.net/gh/wangteng0906/picture/img/202407062108785.jpeg')"><nav id="nav"><span id="blog-info"><a href="/" title="Bingo大侠"><span class="site-name">Bingo大侠</span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-archive"></i><span> 文章</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 时间轴</span></a></li><li><a class="site-page child" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></li><li><a class="site-page child" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></li></ul></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-heartbeat"></i><span> 娱乐</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/music/"><i class="fa-fw fas fa-music"></i><span> 音乐</span></a></li><li><a class="site-page child" href="/Gallery/"><i class="fa-fw fas fa-images"></i><span> 照片</span></a></li><li><a class="site-page child" href="/movies/"><i class="fa-fw fas fa-video"></i><span> 电影</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友链</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">Pulsar的消息保留和过期策略</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2024-07-18T07:18:53.630Z" title="发表于 2024-07-18 15:18:53">2024-07-18</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2024-07-19T03:50:13.518Z" title="更新于 2024-07-19 11:50:13">2024-07-19</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E4%B8%AD%E9%97%B4%E4%BB%B6/">中间件</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">字数总计:</span><span class="word-count">2.5k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>8分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title="Pulsar的消息保留和过期策略"><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">阅读量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div><div id="post-info"><h1 class="post-title">Pulsar的消息保留和过期策略</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2024-07-18T07:18:53.630Z" title="发表于 2024-07-18 15:18:53">2024-07-18</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2024-07-19T03:50:13.518Z" title="更新于 2024-07-19 11:50:13">2024-07-19</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E4%B8%AD%E9%97%B4%E4%BB%B6/">中间件</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">字数总计:</span><span class="word-count">2.5k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>8分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title="Pulsar的消息保留和过期策略"><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">阅读量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div><div id="post-top-cover"><img class="nolazyload" id="post-top-bg" src="background-image: url('https://cdn.jsdelivr.net/gh/wangteng0906/picture/img/202407062108785.jpeg')"></div></header><main class="layout" id="content-inner"><div id="post"><article class="post-content" id="article-container"><p>Pulsar的消息保留和过期策略</p>
+<p>导读</p>
+<p>Apache Pulsar 是 Apache 软件基金会顶级项目，是下一代云原生分布式消息流平台，集消息、存储、轻量化函数式计算为一体，采用计算与存储分离架构设计，支持多租户、持久化存储、多机房跨区域数据复制，具有强一致性、高吞吐、低延时及高可扩展性等流数据存储特性。</p>
+<p>默认情况下，Pulsar Broker 会对消息做如下处理：</p>
+<ul>
+<li>列表项当消息被 Consumer 确认之后，会立即执行删除操作。</li>
+<li>对于未被确认的消息会存储到 backlog 中。</li>
+</ul>
+<p>但是，很多线上的生产环境下，这种默认行为并不能满足我们的生产需求，所以，Pulsar 提供了如下配置策略来覆盖这些行为：</p>
+<ul>
+<li>Retention 策略：用户可以将 Consumer 已经确认的消息保留下来。</li>
+<li>TTL 策略：对于未确认的消息，用户可以通过设置 TTL 来使未确认的消息到达已经确认的状态。</li>
+</ul>
+<p>上述两种策略的设置都是在 NameSpace 的级别进行设置</p>
+<p>Retention 策略</p>
+<p>Retention 策略的设置提供了两种方式：</p>
+<ul>
+<li>消息的大小，默认值：defaultRetentionSizeInMB&#x3D;0</li>
+<li>消息被保存的时间，默认值：defaultRetentionTimeInMinutes&#x3D;0</li>
+</ul>
+<p>我们可以在 broker.conf 中对这两项内容进行配置也可以通过命令行的形式。上文提到过，这两种策略的设置，都是在 NameSpace 的级别进行设置，所以当我们使用命令行配置时，使用 NameSpaces 来进行配置，具体如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">bin/pulsar-admin --admin-url http://*.*.*.*:8080 namespaces set-retention b2d/2024-7 --size -1 --time 1h</span><br><span class="line">The following options are required: --size, -s --time, -t</span><br><span class="line">Set the retention policy <span class="keyword">for</span> a namespaceUsage: set-retention [options] tenant/namespace  Options:  * --size, -s       Retention size <span class="built_in">limit</span> (eg: 10M, 16G, 3T). 0 or less than 1MB means no       retention and -1 means infinite size retention  * --time, -t       Retention time <span class="keyword">in</span> minutes (or minutes, hours, days, weeks eg: 100m, 3h, 2d,       5w). 0 means no retention and -1 means infinite time retention</span><br></pre></td></tr></table></figure>
+<p>如上所示：我们可以通过 -s 或者 -t 来指定我们需要配置的大小或者时间。</p>
+<p>当你设置 Retention 策略之后，可以通过如下命令来查看具体的信息：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">bin/pulsar-admin --admin-url http://*.*.*.*:8080 namespaces get-retention b2d/2024-7</span><br><span class="line">&#123;</span><br><span class="line">  <span class="string">&quot;retentionTimeInMinutes&quot;</span> : 60,</span><br><span class="line">  <span class="string">&quot;retentionSizeInMB&quot;</span> : -1</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>Backlog<br>backlog 是未被确认消息的集合，它有一个大前提是，这些消息所在的 Topic 是被 Broker 所持久化的，在默认情况下，用户创建的 Topic 都会被持久化。换句话说，Pulsar Broker 会将所有未确认或者未处理的消息都存放到 backlog 中。</p>
+<p>同样的，我们可以在 NameSpace 级别对 backlog 的大小进行配置。需要注意的是，对 backlog 进行配置时，我们需要明确以下两点：</p>
+<ul>
+<li>在当前的 NameSpace 下，每一个 Topic 允许的大小是多少</li>
+<li>如果超过设定的 backlog 的阈值，将会执行哪些操作</li>
+</ul>
+<p>当超过设定的 backlog 的阈值，Pulsar 提供了以下三种策略供用户选择：<br><img src="https://cdn.jsdelivr.net/gh/wangteng0906/picture/img/202407191131894.png"><br>你可以通过 set-backlog-quota 在 NameSpace 级别对 backlog 进行配置，具体如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># ./bin/pulsar-admin namespaces set-backlog-quota </span></span><br><span class="line">The following options are required: -l, --<span class="built_in">limit</span> -p, --policy</span><br><span class="line">Set a backlog quota policy <span class="keyword">for</span> a namespaceUsage: set-backlog-quota [options] tenant/namespace  Options:  * -l, --<span class="built_in">limit</span>       Size <span class="built_in">limit</span> (eg: 10M, 16G)  * -p, --policy       Retention policy to enforce when the <span class="built_in">limit</span> is reached. Valid options are:       [producer_request_hold, producer_exception, consumer_backlog_eviction]</span><br></pre></td></tr></table></figure>
+<p>如上所示，set-backlog-quota 提供了两个参数，-l 用来指定你设置 backlog 的大小，-p 用来指定，当超过你设置的 backlog 的阈值之后，Broker 将会执行的策略。</p>
+<p>当你设置 backlog 之后，可以通过如下命令，查看相应的信息：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">bin/pulsar-admin --admin-url http://*:8080 namespaces get-backlog-quotas b2d/2024-7</span><br><span class="line">&#123;</span><br><span class="line">  <span class="string">&quot;destination_storage&quot;</span> : &#123;</span><br><span class="line">    <span class="string">&quot;limit&quot;</span> : 1073741824000,</span><br><span class="line">    <span class="string">&quot;policy&quot;</span> : <span class="string">&quot;consumer_backlog_eviction&quot;</span></span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>如果你期望取消 backlog 的配置，可以使用如下命令：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ pulsar-admin namespaces remove-backlog-quota [your tenant]/[your namespace]</span><br></pre></td></tr></table></figure>
+<p>当有消息积压时，你可以通过 clear-backlog 来清除积压的消息。清除 backlog 中积压的消息是相对危险的操作，所以系统会提示你，是否确认要删除 backlog 中的消息， clear-backlog 提供了 -f(–force) 的参数来屏蔽该提示。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ pulsar-admin namespaces clear-backlog [your tenant]/[your namespace]</span><br></pre></td></tr></table></figure>
+<h2 id="Time-To-Live-（TTL）"><a href="#Time-To-Live-（TTL）" class="headerlink" title="Time To Live （TTL）"></a>Time To Live （TTL）</h2><p>默认情况下，Pulsar 会持久化所有未被确认的消息。如果未被确认的消息有很多，这种策略会造成大量的消息被积压，导致磁盘空间增大。有些场景下，消息并不需要被持久化，用户更期望的行为是，将这些未被确认的消息直接丢弃。这种情况下，你可以通过设置 TTL 使得未被确认的消息进入到被确认的状态，当超过设定的 TTL 时间之后，配合相应的 Retention 策略将消息丢弃。</p>
+<p>TTL 的一个典型使用场景是，当 Consumer 由于某些原因出现故障，不能正常消费消息，这时 Producer 还在不断的往 Topic 中生产消息，会造成 Topic 中有大量的未确认的消息出现，这时你可以通过设置 TTL 将这些未确认的消息变为已确认的状态。</p>
+<p>同样的，你可以在 Namesapce 级别下，通过指定 set-message-ttl 对 TTL 进行设置，具体命令如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">root@/pulsar<span class="comment"># ./bin/pulsar-admin namespaces set-message-ttl</span></span><br><span class="line">The following option is required: --messageTTL, -ttl</span><br><span class="line">Set Message TTL <span class="keyword">for</span> a namespaceUsage: set-message-ttl [options] tenant/namespace  Options:  * --messageTTL, -ttl       Message TTL <span class="keyword">in</span> seconds       Default: 0</span><br></pre></td></tr></table></figure>
+<p>如上所示，set-message-ttl 只有一个参数 -ttl，单位为秒，默认值为 0。</p>
+<p>当你设置 TTL 策略之后，可以通过 get-message-ttl 查看相应的配置信息，具体如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">bin/pulsar-admin --admin-url http://*.*.*.*:8080 namespaces get-message-ttl b2d/2024-7</span><br><span class="line">0</span><br></pre></td></tr></table></figure>
+<h2 id="TTL、Backlog-与-Retention-的区别和联系"><a href="#TTL、Backlog-与-Retention-的区别和联系" class="headerlink" title="TTL、Backlog 与 Retention 的区别和联系"></a>TTL、Backlog 与 Retention 的区别和联系</h2><p>在上述的描述过程中，可以发现，TTL 只去处理一件事情，将未被确认的消息变为被确认的状态，TTL 本身不会去涉及相应的删除操作，具体如下图所示：<br><img src="https://cdn.jsdelivr.net/gh/wangteng0906/picture/img/202407191143128.png"></p>
+<ol>
+<li>列表项在 T1 阶段，m1-m5 这 5 条消息被确认，m6-m10 这 5 条消息未被确认</li>
+<li>列表项在 T2 阶段，对 m6、m7、m8 这三条消息设置 TTL 策略</li>
+<li>列表项在 T3 阶段，到达 TTL 设定的阈值，m6、m7、m8 这三条消息被确认<br>通过上图可以看到，对于 backlog 中未被确认的消息，当你设置 TTL 之后，会将未确认消息的状态变为确认的状态。TTL 在这里所起到的作用就是将消息的 Cursor 从 m5 移动到 m8，m6、m7、m8 这三条消息变为已确认状态。</li>
+</ol>
+<p>Pulsar 是一个 multiple-subscription 的消息系统，对于 Topic 中的一条消息，只有当所有订阅者都对这条消息 ack 或者消费了，它才能被删除。</p>
+<p>默认情况下，Pulsar Broker 会将所有未确认的消息持久化到 backlog 中。TTL 的功能是，你可以将这些未被确认的消息变为被确认的状态，而 Retention 所关注的点是，当消息处于被确认的状态时，你可以对已确认的消息进行的保留策略是什么。换句话说，backlog 是针对未确认的消息，Broker 所做的处理是什么。Retention 是针对已确认的消息，Broker 所做的保留策略是什么。</p>
+<h2 id="TTL-与死信队列"><a href="#TTL-与死信队列" class="headerlink" title="TTL 与死信队列"></a>TTL 与死信队列</h2><p>死信队列的相关介绍在此不做赘述。</p>
+<p>在生产环境中，有时可能遇到质量差的数据是由于上游的原因导致的，必须由上游来解决，继续尝试处理其它的消息已经没有意义，这时候用户希望在发生错误时立即停止处理。Pulsar 中提供了一种特殊的 Topic——死信队列。</p>
+<p>死信队列与 TTL 都可以将未确认的消息变为已确认的状态。他们之间主要的不同在于，在上图中的 T2 阶段，TTL 只是将未确认的消息变为已确认的状态，死信队列的做法是将消息丢弃到死信队列中，m6、m7、m8 这三条消息变为被确认的状态。m9、m10 这两条有效消息会正常处理，Broker 也会继续运行。之后，你可以从死信队列中检查无效消息，并根据需要忽略或修复并重新处理。用户可以根据自己的需求来确定未确认的消息是通过 TTL 的形式将其变为确认状态还是通过死信队列的方式来实现，依据的主要标准就是看你需不要处理消费不了的消息。</p>
+<h2 id="使用问题"><a href="#使用问题" class="headerlink" title="使用问题"></a>使用问题</h2><ul>
+<li>场景一：</li>
+</ul>
+<p>启动 Producer 往 Broker 发送消息，设置了 TTL ，没有启动 Consumer，同时设置了 Retention 策略为半小时，到达 Retention 的阈值之后，发现设置 TTL 的消息并没有被移除，这是为什么呢？</p>
+<p>在上述场景中，有一个问题需要注意，没有启动 Consumer，在上面我们说到，TTL 是将消息设置的 Cousor 向前移动，如果没有启动 Consumer，相当于 Cousor 没有被初始化，也就是如果没有 Consumer，你就没有必要去设置 TTL。</p>
+<ul>
+<li>场景二：</li>
+</ul>
+<p>我设置了Retention 策略，但是到达了 Retention 的阈值，Topic 中的数据并没有被删除掉，这是为什么呢？</p>
+<p>这个是 Pulsar 内部的一个实现机制，在 Pulsar 中 Topic 是一个逻辑的概念，一个 Topic 对应一个 manage ledger，当你写数据的时候，实际上是将数据写到了 ledger 中，还记得在之前很多文章中提到的有关 Pulsar 设计的一个核心所在：在 Pulsar 中，所有的操作都是异步的，所以当 Retention 到达指定阈值之后，是否删除对应 ledger 中的数据，这个操作也是异步的。delete 的操作是不会对当前 active 的 ledger 执行的。只有当数据写满了当前的 ledger ，ledger 发生切换时，才会去真正的执行 retention 策略。</p>
+<p>如果想要强制执行，可以使用 pulsar-admin 将当前的 ledger 强制卸载，迫使其发生 ledger 的切换。</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://blog.wangteng.space">Bingo_Teng</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://blog.wangteng.space/post/007.html">https://blog.wangteng.space/post/007.html</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来自 <a href="https://blog.wangteng.space" target="_blank">Bingo大侠</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/Pulsar/">Pulsar</a></div><div class="post_share"><div class="social-share" data-image="https://cdn.jsdelivr.net/gh/wangteng0906/picture/img/202407101147226.jpeg" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.3/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.3/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><div class="next-post pull-full"><a href="/post/006.html" title="Nginx之localtion规则与地址重写（超详细实例篇）"><img class="cover" src="https://cdn.jsdelivr.net/gh/wangteng0906/picture/img/202407101147226.jpeg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="pagination-info"><div class="label">下一篇</div><div class="next_info">Nginx之localtion规则与地址重写（超详细实例篇）</div></div></a></div></nav><hr class="custom-hr"/><div id="post-comment"><div class="comment-head"><div class="comment-headline"><i class="fas fa-comments fa-fw"></i><span> 评论</span></div></div><div class="comment-wrap"><div><div id="twikoo-wrap"></div></div></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info"><div class="is-center"><div class="avatar-img"><img src="https://cdn.jsdelivr.net/gh/wangteng0906/picture/img/202407032151846.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info__name">Bingo_Teng</div><div class="author-info__description">2024年的理想开始实现了吗？</div></div><div class="card-info-data site-data is-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">7</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">6</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">3</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/wangteng0906"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons is-center"><a class="social-icon" href="https://github.com/wangteng0906" target="_blank" title="Github"><i class="fab fa-github" style="color: #24292e;"></i></a><a class="social-icon" href="mailto:1364695199@qq.com" target="_blank" title="Email"><i class="fas fa-envelope" style="color: #4a7dbe;"></i></a><a class="social-icon" href="/1364695199" target="_blank" title="QQ"><i class="fa-brands fa-qq" style="color: #2c9678;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">如果阅读过程中遇到了问题，请及时评论或者留言，看到了会在第一时间给出回复。</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Time-To-Live-%EF%BC%88TTL%EF%BC%89"><span class="toc-number">1.</span> <span class="toc-text">Time To Live （TTL）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#TTL%E3%80%81Backlog-%E4%B8%8E-Retention-%E7%9A%84%E5%8C%BA%E5%88%AB%E5%92%8C%E8%81%94%E7%B3%BB"><span class="toc-number">2.</span> <span class="toc-text">TTL、Backlog 与 Retention 的区别和联系</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#TTL-%E4%B8%8E%E6%AD%BB%E4%BF%A1%E9%98%9F%E5%88%97"><span class="toc-number">3.</span> <span class="toc-text">TTL 与死信队列</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8%E9%97%AE%E9%A2%98"><span class="toc-number">4.</span> <span class="toc-text">使用问题</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/post/007.html" title="Pulsar的消息保留和过期策略"><img src="https://cdn.jsdelivr.net/gh/wangteng0906/picture/img/202407101147226.jpeg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Pulsar的消息保留和过期策略"/></a><div class="content"><a class="title" href="/post/007.html" title="Pulsar的消息保留和过期策略">Pulsar的消息保留和过期策略</a><time datetime="2024-07-18T07:18:53.630Z" title="发表于 2024-07-18 15:18:53">2024-07-18</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/post/006.html" title="Nginx之localtion规则与地址重写（超详细实例篇）"><img src="https://cdn.jsdelivr.net/gh/wangteng0906/picture/img/202407101147226.jpeg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Nginx之localtion规则与地址重写（超详细实例篇）"/></a><div class="content"><a class="title" href="/post/006.html" title="Nginx之localtion规则与地址重写（超详细实例篇）">Nginx之localtion规则与地址重写（超详细实例篇）</a><time datetime="2024-07-09T09:08:49.342Z" title="发表于 2024-07-09 17:08:49">2024-07-09</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/post/005.html" title="Centos7上PXE服务器的搭建部署"><img src="https://cdn.jsdelivr.net/gh/wangteng0906/picture/img/202407051725822.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Centos7上PXE服务器的搭建部署"/></a><div class="content"><a class="title" href="/post/005.html" title="Centos7上PXE服务器的搭建部署">Centos7上PXE服务器的搭建部署</a><time datetime="2024-07-05T09:36:48.016Z" title="发表于 2024-07-05 17:36:48">2024-07-05</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/post/004.html" title="如何使用shell实现frp自动部署以及生成相应客户端服务端配置文件"><img src="https://cdn.jsdelivr.net/gh/wangteng0906/picture/img/202407051725822.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="如何使用shell实现frp自动部署以及生成相应客户端服务端配置文件"/></a><div class="content"><a class="title" href="/post/004.html" title="如何使用shell实现frp自动部署以及生成相应客户端服务端配置文件">如何使用shell实现frp自动部署以及生成相应客户端服务端配置文件</a><time datetime="2024-07-05T09:33:42.649Z" title="发表于 2024-07-05 17:33:42">2024-07-05</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/post/003.html" title="adsl脚本实现一键式拨号以及vnc一键式安装"><img src="https://cdn.jsdelivr.net/gh/wangteng0906/picture/img/202407051725822.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="adsl脚本实现一键式拨号以及vnc一键式安装"/></a><div class="content"><a class="title" href="/post/003.html" title="adsl脚本实现一键式拨号以及vnc一键式安装">adsl脚本实现一键式拨号以及vnc一键式安装</a><time datetime="2024-07-05T09:09:29.455Z" title="发表于 2024-07-05 17:09:29">2024-07-05</time></div></div></div></div></div></div></main><footer id="footer"><div id="footer-wrap"><div id="ft"><div class="ft-item-1"><div class="t-top"><div class="t-t-l"><p class="ft-t t-l-t">御剑-</p><div class="bg-ad"><div>希望其实就在每个人心里，一个乐观的人，即使在失意灰暗的日子里，也能在黑暗中看到希望的光亮；一个悲观的人，即使是在一片大好的境况中，也担心会有无数的艰难险阻，阻拦在通向成功的路上。</div><div class="btn-xz-box"><a class="btn-xz" target="_blank" rel="noopener" href="https://home.wangteng.space/">大侠的港湾</a></div></div></div><div class="t-t-r"><p class="ft-t t-l-t">修仙导航</p><ul class="ft-links"><li><a href="https://blog.wangteng.space/articles/hexo1600/">建站指南</a><a href="https://blog.wangteng.space/nav.html">网址导航</a></li><li><a href="https://blog.wangteng.space/sponsorWall/">来杯咖啡</a><a href="https://blog.wangteng.space/comments/">留点什么</a></li><li><a href="https://blog.wangteng.space/about/">关于博主</a><a href="https://blog.wangteng.space/archives/">文章归档</a></li><li><a href="https://blog.wangteng.space/categories/">文章分类</a><a href="https://blog.wangteng.space/tags/">文章标签</a></li><li><a href="https://blog.wangteng.space/Gallery/">我的相册</a><a href="https://blog.wangteng.space/bangumis/">我的追番</a></li><li><a href="https://blog.wangteng.space/specialEffects/">一些特效</a><a href="https://blog.wangteng.space/wallpaper/">一些壁纸</a></li></ul></div></div></div><div class="ft-item-2"><p class="ft-t">推荐友链</p><div class="ft-img-group"><div class="img-group-item"><a href="https://blog.wangteng.space/"><img src="https://cdn.jsdelivr.net/gh/wangteng0906/picture/img/202407032151846.jpg" alt=""/></a></div><div class="img-group-item"><a target="_blank" rel="noopener" href="https://fe32.top/"><img src="https://bu.dusays.com/2022/05/02/626f92e193879.jpg" alt=""/></a></div><div class="img-group-item"><a target="_blank" rel="noopener" href="https://blog.anheyu.com/"><img src="https://npm.elemecdn.com/anzhiyu-blog-static@1.0.4/img/avatar.jpg" alt=""/></a></div><div class="img-group-item"><a target="_blank" rel="noopener" href="https://dusays.com/"><img src="https://cdn.dusays.com/avatar.png" alt=""/></a></div><div class="img-group-item"><a target="_blank" rel="noopener" href="https://www.yt-blog.top/9952/"><img src="https://bu.dusays.com/2024/01/26/65b2f4daaaf4c.webp" alt=""/></a></div><div class="img-group-item"><a target="_blank" rel="noopener" href="https://butterfly.js.org/"><img src="https://butterfly.js.org/img/avatar.png" alt=""/></a></div><div class="img-group-item"><a target="_blank" rel="noopener" href="https://www.fomal.cc/"><img src="https://sourcebucket.s3.bitiful.net/img/avatar.webp" alt=""/></a></div><div class="img-group-item"><a target="_blank" rel="noopener" href="https://blog.zhheo.com/"><img src="https://blog.zhheo.com/img/pwa/144.webp" alt=""/></a></div></div></div></div><div class="copyright"><a target="_blank" href="https://beian.miit.gov.cn/">陕ICP备2024042922号</a>&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&nbsp&copy;2024  <i id="heartbeat" class="fa fas fa-heartbeat"></i> Bingo_Teng</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="浅色和深色模式转换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><a id="to_comment" href="#post-comment" title="直达评论"><i class="fas fa-comments"></i></a><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=4.14.0-b3"></script><script src="/js/main.js?v=4.14.0-b3"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0.35/dist/fancybox/fancybox.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/instant.page@5.2.0/instantpage.min.js" type="module"></script><div class="js-pjax"><script>(() => {
+  const runMermaid = (ele) => {
+    window.loadMermaid = true
+    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default'
+
+    Array.from(ele).forEach((item, index) => {
+      const mermaidSrc = item.firstElementChild
+      const mermaidThemeConfig = '%%{init:{ \'theme\':\'' + theme + '\'}}%%\n'
+      const mermaidID = 'mermaid-' + index
+      const mermaidDefinition = mermaidThemeConfig + mermaidSrc.textContent
+
+      const renderFn = mermaid.render(mermaidID, mermaidDefinition)
+
+      const renderV10 = () => {
+        renderFn.then(({svg}) => {
+          mermaidSrc.insertAdjacentHTML('afterend', svg)
+        })
+      }
+
+      const renderV9 = svg => {
+        mermaidSrc.insertAdjacentHTML('afterend', svg)
+      }
+
+      typeof renderFn === 'string' ? renderV9(renderFn) : renderV10()
+    })
+  }
+
+  const codeToMermaid = () => {
+    const codeMermaidEle = document.querySelectorAll('pre > code.mermaid')
+    if (codeMermaidEle.length === 0) return
+    
+    codeMermaidEle.forEach(ele => {
+      const newEle = document.createElement('div')
+      newEle.className = 'mermaid-wrap'
+      newEle.innerHTML = `<pre class="mermaid-src" hidden>${ele.textContent}</pre>`
+      ele.parentNode.replaceWith(newEle)
+    })
+  }
+
+  const loadMermaid = () => {
+    if (false) codeToMermaid()
+    const $mermaid = document.querySelectorAll('#article-container .mermaid-wrap')
+    if ($mermaid.length === 0) return
+
+    const runMermaidFn = () => runMermaid($mermaid)
+    btf.addGlobalFn('themeChange', runMermaidFn, 'mermaid')
+    window.loadMermaid ? runMermaidFn() : btf.getScript('https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js').then(runMermaidFn)
+  }
+  
+  btf.addGlobalFn('encrypt', loadMermaid, 'mermaid')
+  window.pjax ? loadMermaid() : document.addEventListener('DOMContentLoaded', loadMermaid)
+})()</script><script>(() => {
+  const getCount = () => {
+    const countELement = document.getElementById('twikoo-count')
+    if(!countELement) return
+    twikoo.getCommentsCount({
+      envId: 'https://twikoo.wangteng.space/',
+      region: '',
+      urls: [window.location.pathname],
+      includeReply: false
+    }).then(res => {
+      countELement.textContent = res[0].count
+    }).catch(err => {
+      console.error(err)
+    })
+  }
+
+  const init = () => {
+    twikoo.init(Object.assign({
+      el: '#twikoo-wrap',
+      envId: 'https://twikoo.wangteng.space/',
+      region: '',
+      onCommentLoaded: () => {
+        btf.loadLightbox(document.querySelectorAll('#twikoo .tk-content img:not(.tk-owo-emotion)'))
+      }
+    }, null))
+
+    GLOBAL_CONFIG_SITE.isPost && getCount()
+  }
+
+  const loadTwikoo = () => {
+    if (typeof twikoo === 'object') setTimeout(init,0)
+    else btf.getScript('https://cdn.jsdelivr.net/npm/twikoo@1.6.32/dist/twikoo.all.min.js').then(init)
+  }
+
+  if ('Twikoo' === 'Twikoo' || !true) {
+    if (true) btf.loadComment(document.getElementById('twikoo-wrap'), loadTwikoo)
+    else loadTwikoo()
+  } else {
+    window.loadOtherComment = loadTwikoo
+  }
+})()</script></div><script>window.addEventListener('load', () => {
+  const changeContent = (content) => {
+    if (content === '') return content
+
+    content = content.replace(/<img.*?src="(.*?)"?[^\>]+>/ig, '[图片]') // replace image link
+    content = content.replace(/<a[^>]+?href=["']?([^"']+)["']?[^>]*>([^<]+)<\/a>/gi, '[链接]') // replace url
+    content = content.replace(/<pre><code>.*?<\/pre>/gi, '[代码]') // replace code
+    content = content.replace(/<[^>]+>/g,"") // remove html tag
+
+    if (content.length > 150) {
+      content = content.substring(0,150) + '...'
+    }
+    return content
+  }
+
+  const getComment = () => {
+    const runTwikoo = () => {
+      twikoo.getRecentComments({
+        envId: 'https://twikoo.wangteng.space/',
+        region: '',
+        pageSize: 6,
+        includeReply: true
+      }).then(function (res) {
+        const twikooArray = res.map(e => {
+          return {
+            'content': changeContent(e.comment),
+            'avatar': e.avatar,
+            'nick': e.nick,
+            'url': e.url + '#' + e.id,
+            'date': new Date(e.created).toISOString()
+          }
+        })
+
+        btf.saveToLocal.set('twikoo-newest-comments', JSON.stringify(twikooArray), 10/(60*24))
+        generateHtml(twikooArray)
+      }).catch(function (err) {
+        const $dom = document.querySelector('#card-newest-comments .aside-list')
+        $dom.textContent= "无法获取评论，请确认相关配置是否正确"
+      })
+    }
+
+    if (typeof twikoo === 'object') {
+      runTwikoo()
+    } else {
+      btf.getScript('https://cdn.jsdelivr.net/npm/twikoo@1.6.32/dist/twikoo.all.min.js').then(runTwikoo)
+    }
+  }
+
+  const generateHtml = array => {
+    let result = ''
+
+    if (array.length) {
+      for (let i = 0; i < array.length; i++) {
+        result += '<div class=\'aside-list-item\'>'
+
+        if (true) {
+          const name = 'src'
+          result += `<a href='${array[i].url}' class='thumbnail'><img ${name}='${array[i].avatar}' alt='${array[i].nick}'></a>`
+        }
+        
+        result += `<div class='content'>
+        <a class='comment' href='${array[i].url}' title='${array[i].content}'>${array[i].content}</a>
+        <div class='name'><span>${array[i].nick} / </span><time datetime="${array[i].date}">${btf.diffDate(array[i].date, true)}</time></div>
+        </div></div>`
+      }
+    } else {
+      result += '没有评论'
+    }
+
+    let $dom = document.querySelector('#card-newest-comments .aside-list')
+    $dom && ($dom.innerHTML= result)
+    window.lazyLoadInstance && window.lazyLoadInstance.update()
+    window.pjax && window.pjax.refresh($dom)
+  }
+
+  const newestCommentInit = () => {
+    if (document.querySelector('#card-newest-comments .aside-list')) {
+      const data = btf.saveToLocal.get('twikoo-newest-comments')
+      if (data) {
+        generateHtml(JSON.parse(data))
+      } else {
+        getComment()
+      }
+    }
+  }
+
+  newestCommentInit()
+  btf.addGlobalFn('pjaxComplete', newestCommentInit, 'twikoo_newestComment')
+})</script><div class="aplayer no-destroy" data-id="12267287378" data-server="netease" data-type="playlist" data-fixed="true" data-autoplay="false" data-lrcType="-1"> </div><script src="/js/custom.js"></script><script defer="defer" id="fluttering_ribbon" mobile="true" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.3/dist/canvas-fluttering-ribbon.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.3/dist/activate-power-mode.min.js"></script><script>POWERMODE.colorful = true;
+POWERMODE.shake = false;
+POWERMODE.mobile = false;
+document.body.addEventListener('input', POWERMODE);
+</script><script id="click-heart" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.3/dist/click-heart.min.js" async="async" mobile="true"></script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.3/metingjs/dist/Meting.min.js"></script><script>(() => {
+  const destroyAplayer = () => {
+    if (window.aplayers) {
+      for (let i = 0; i < window.aplayers.length; i++) {
+        if (!window.aplayers[i].options.fixed) {
+          window.aplayers[i].destroy()
+        }
+      }
+    }
+  }
+
+  const loadMeting = () => {
+    typeof loadMeting === 'function' && document.getElementsByClassName('aplayer').length && loadMeting()
+  }
+
+  btf.addGlobalFn('pjaxSend', destroyAplayer, 'destroyAplayer')
+  btf.addGlobalFn('pjaxComplete', loadMeting, 'loadMeting')
+})()</script><script src="https://cdn.jsdelivr.net/npm/pjax@0.2.8/pjax.min.js"></script><script>let pjaxSelectors = ["head > title","#config-diff","#body-wrap","#rightside-config-hide","#rightside-config-show",".js-pjax"]
+
+var pjax = new Pjax({
+  elements: 'a:not([target="_blank"]):not([href="/no-pjax/"])',
+  selectors: pjaxSelectors,
+  cacheBust: false,
+  analytics: false,
+  scrollRestoration: false
+})
+
+const triggerPjaxFn = (val) => {
+  if (!val) return
+  Object.values(val).forEach(fn => { fn() })
+}
+
+document.addEventListener('pjax:send', function () {
+
+  // removeEventListener
+  btf.removeGlobalFnEvent('pjax')
+  btf.removeGlobalFnEvent('themeChange')
+
+  //reset readmode
+  const $bodyClassList = document.body.classList
+  $bodyClassList.contains('read-mode') && $bodyClassList.remove('read-mode')
+
+  triggerPjaxFn(window.globalFn.pjaxSend)
+})
+
+document.addEventListener('pjax:complete', () => {
+  document.querySelectorAll('script[data-pjax]').forEach(item => {
+    const newScript = document.createElement('script')
+    const content = item.text || item.textContent || item.innerHTML || ""
+    Array.from(item.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value))
+    newScript.appendChild(document.createTextNode(content))
+    item.parentNode.replaceChild(newScript, item)
+  })
+
+  triggerPjaxFn(window.globalFn.pjaxComplete)
+})
+
+document.addEventListener('pjax:error', e => {
+  if (e.request.status === 404) {
+    pjax.loadUrl('/404.html')
+  }
+})</script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="algolia-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="search-wrap"><div id="algolia-search-input"></div><hr/><div id="algolia-search-results"><div id="algolia-hits"></div><div id="algolia-pagination"></div><div id="algolia-info"><div class="algolia-stats"></div><div class="algolia-poweredBy"></div></div></div></div></div><div id="search-mask"></div><script src="https://cdn.jsdelivr.net/npm/algoliasearch@4.23.2/dist/algoliasearch-lite.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/instantsearch.js@4.66.1/dist/instantsearch.production.min.js"></script><script src="/js/search/algolia.js?v=4.14.0-b3"></script></div></div></body></html>
