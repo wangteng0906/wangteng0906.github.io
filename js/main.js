@@ -23,6 +23,8 @@ document.addEventListener('DOMContentLoaded', function () {
     adjustMenu(true)
     $nav.classList.add('show')
   }
+ 
+
   // DOMContentLoaded时初始化
   initAdjust()
 
