@@ -1,0 +1,538 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>VictoriaMetrics存储机制 | Bingo大侠</title><meta name="author" content="Bingo_Teng,1364695199@qq.com"><meta name="copyright" content="Bingo_Teng"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="1.整体架构VictoriaMetrics的集群主要由vmstorage、vminsert、vmselect等三部分组成，其中，vmstorage 负责提供数据存储服务; vminsert 是数据存储 vmstorage 的代理，使用一致性hash算法进行写入分片； vmselect 负责数据查询，根据输入的查询条件从 vmstorage 中查询数据。 VictoriaMetrics的这个三个组件">
+<meta property="og:type" content="article">
+<meta property="og:title" content="VictoriaMetrics存储机制">
+<meta property="og:url" content="https://blog.wangteng.space/post/008.html">
+<meta property="og:site_name" content="Bingo大侠">
+<meta property="og:description" content="1.整体架构VictoriaMetrics的集群主要由vmstorage、vminsert、vmselect等三部分组成，其中，vmstorage 负责提供数据存储服务; vminsert 是数据存储 vmstorage 的代理，使用一致性hash算法进行写入分片； vmselect 负责数据查询，根据输入的查询条件从 vmstorage 中查询数据。 VictoriaMetrics的这个三个组件">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.wangteng.space/image/202408291002829vm.webp">
+<meta property="article:published_time" content="2024-08-29T01:52:42.769Z">
+<meta property="article:modified_time" content="2024-08-29T02:10:00.000Z">
+<meta property="article:author" content="Bingo_Teng">
+<meta property="article:tag" content="VictoriaMetrics">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.wangteng.space/image/202408291002829vm.webp"><link rel="shortcut icon" href="https://image.wangteng.space/image/202408021550021.png"><link rel="canonical" href="https://blog.wangteng.space/post/008.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//hm.baidu.com"/><link rel="preconnect" href="//fonts.googleapis.com" crossorigin=""/><link rel="preconnect" href="//busuanzi.ibruce.info"/><meta name="google-site-verification" content="cXGUmZ04GXw763C3yz8N7AKcULDeZogcpuYxVuhfgN0"/><meta name="baidu-site-verification" content="codeva-XY4OGiVs6L"/><link rel="stylesheet" href="/css/index.css?v=4.14.0-b3"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0.35/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>(()=>{
+      const saveToLocal = {
+        set: (key, value, ttl) => {
+          if (ttl === 0) return
+          const now = Date.now()
+          const expiry = now + ttl * 86400000
+          const item = {
+            value,
+            expiry
+          }
+          localStorage.setItem(key, JSON.stringify(item))
+        },
+      
+        get: key => {
+          const itemStr = localStorage.getItem(key)
+      
+          if (!itemStr) {
+            return undefined
+          }
+          const item = JSON.parse(itemStr)
+          const now = Date.now()
+      
+          if (now > item.expiry) {
+            localStorage.removeItem(key)
+            return undefined
+          }
+          return item.value
+        }
+      }
+      
+      window.btf = {
+        saveToLocal: saveToLocal,
+        getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+          const script = document.createElement('script')
+          script.src = url
+          script.async = true
+          script.onerror = reject
+          script.onload = script.onreadystatechange = function() {
+            const loadState = this.readyState
+            if (loadState && loadState !== 'loaded' && loadState !== 'complete') return
+            script.onload = script.onreadystatechange = null
+            resolve()
+          }
+
+          Object.keys(attr).forEach(key => {
+            script.setAttribute(key, attr[key])
+          })
+
+          document.head.appendChild(script)
+        }),
+
+        getCSS: (url, id = false) => new Promise((resolve, reject) => {
+          const link = document.createElement('link')
+          link.rel = 'stylesheet'
+          link.href = url
+          if (id) link.id = id
+          link.onerror = reject
+          link.onload = link.onreadystatechange = function() {
+            const loadState = this.readyState
+            if (loadState && loadState !== 'loaded' && loadState !== 'complete') return
+            link.onload = link.onreadystatechange = null
+            resolve()
+          }
+          document.head.appendChild(link)
+        }),
+
+        addGlobalFn: (key, fn, name = false, parent = window) => {
+          const pjaxEnable = true
+          if (!pjaxEnable && key.startsWith('pjax')) return
+
+          const globalFn = parent.globalFn || {}
+          const keyObj = globalFn[key] || {}
+    
+          if (name && keyObj[name]) return
+    
+          name = name || Object.keys(keyObj).length
+          keyObj[name] = fn
+          globalFn[key] = keyObj
+          parent.globalFn = globalFn
+        }
+      }
+    
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+      
+      const t = saveToLocal.get('theme')
+    
+        if (t === 'dark') activateDarkMode()
+        else if (t === 'light') activateLightMode()
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        if (asideStatus === 'hide') {
+          document.documentElement.classList.add('hide-aside')
+        } else {
+          document.documentElement.classList.remove('hide-aside')
+        }
+      }
+    
+      const detectApple = () => {
+        if(/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)){
+          document.documentElement.classList.add('apple')
+        }
+      }
+      detectApple()
+    })()</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "https://hm.baidu.com/hm.js?abc12d17aaf88b289b4a545992353f24";
+  var s = document.getElementsByTagName("script")[0]; 
+  s.parentNode.insertBefore(hm, s);
+})();
+btf.addGlobalFn('pjaxComplete', () => {
+  _hmt.push(['_trackPageview',window.location.pathname])
+}, 'baidu_analytics')
+</script><link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Titillium+Web&amp;display=swap" media="print" onload="this.media='all'"><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: {"appId":"2MWYM2YI6M","apiKey":"4f970d28a5192c2c71154e54594b59a1","indexName":"search","hits":{"per_page":10},"languages":{"input_placeholder":"搜索文章","hits_empty":"找不到您查询的内容：${query}","hits_stats":"找到 ${hits} 条结果，用时 ${time} 毫秒"}},
+  localSearch: undefined,
+  translate: undefined,
+  noticeOutdate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":true,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制错误',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: true,
+    post: true
+  },
+  runtime: '天',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: {"limitCount":50,"languages":{"author":"作者: Bingo_Teng","link":"链接: ","source":"来源: Bingo大侠","info":"著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。"}},
+  lightbox: 'fancybox',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.11.1/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyload: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: true,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'VictoriaMetrics存储机制',
+  isPost: true,
+  isHome: false,
+  isHighlightShrink: false,
+  isToc: true,
+  postUpdate: '2024-08-29 10:10:00'
+}</script><link rel="stylesheet" href="/css/custom.css"><meta name="generator" content="Hexo 7.2.0"></head><body><div id="loading-box" onclick="document.getElementById(&quot;loading-box&quot;).classList.add(&quot;loaded&quot;)"><div class="loading-bg"><div class="loading-img"></div><div class="loading-image-dot"></div></div></div><script>const preloader = {
+  endLoading: () => {
+    document.body.style.overflow = 'auto';
+    document.getElementById('loading-box').classList.add("loaded")
+  },
+  initLoading: () => {
+    document.body.style.overflow = '';
+    document.getElementById('loading-box').classList.remove("loaded")
+
+  }
+}
+window.addEventListener('load',()=> { preloader.endLoading() })
+
+if (true) {
+  document.addEventListener('pjax:send', () => { preloader.initLoading() })
+  document.addEventListener('pjax:complete', () => { preloader.endLoading() })
+}</script><script>window.paceOptions = {
+  restartOnPushState: false
+}
+
+btf.addGlobalFn('pjaxSend', () => {
+  Pace.restart()
+}, 'pace_restart')
+
+</script><link rel="stylesheet" href="/css/progress_bar.css"/><script src="https://cdn.jsdelivr.net/npm/pace-js@1.2.4/pace.min.js"></script><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img is-center"><img src="https://image.wangteng.space/image/202408021453686.jpg" onerror="onerror=null;src='/img/friend_404.gif'" alt="avatar"/></div><div class="sidebar-site-data site-data is-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">8</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">7</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">4</div></a></div><hr class="custom-hr"/><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-archive"></i><span> 文章</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 时间轴</span></a></li><li><a class="site-page child" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></li><li><a class="site-page child" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></li></ul></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-heartbeat"></i><span> 娱乐</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/music/"><i class="fa-fw fas fa-music"></i><span> 音乐</span></a></li><li><a class="site-page child" href="/Gallery/"><i class="fa-fw fas fa-images"></i><span> 照片</span></a></li><li><a class="site-page child" href="/movies/"><i class="fa-fw fas fa-video"></i><span> 电影</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友链</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url('https://image.wangteng.space/image/202408021704265.jpeg')"><nav id="nav"><span id="blog-info"><a href="/" title="Bingo大侠"><span class="site-name">Bingo大侠</span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-archive"></i><span> 文章</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 时间轴</span></a></li><li><a class="site-page child" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></li><li><a class="site-page child" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></li></ul></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-heartbeat"></i><span> 娱乐</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/music/"><i class="fa-fw fas fa-music"></i><span> 音乐</span></a></li><li><a class="site-page child" href="/Gallery/"><i class="fa-fw fas fa-images"></i><span> 照片</span></a></li><li><a class="site-page child" href="/movies/"><i class="fa-fw fas fa-video"></i><span> 电影</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友链</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">VictoriaMetrics存储机制</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2024-08-29T01:52:42.769Z" title="发表于 2024-08-29 09:52:42">2024-08-29</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2024-08-29T02:10:00.000Z" title="更新于 2024-08-29 10:10:00">2024-08-29</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E6%95%B0%E6%8D%AE%E5%BA%93/">数据库</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">字数总计:</span><span class="word-count">4.1k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>13分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title="VictoriaMetrics存储机制"><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">阅读量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div><div id="post-info"><h1 class="post-title">VictoriaMetrics存储机制</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2024-08-29T01:52:42.769Z" title="发表于 2024-08-29 09:52:42">2024-08-29</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2024-08-29T02:10:00.000Z" title="更新于 2024-08-29 10:10:00">2024-08-29</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E6%95%B0%E6%8D%AE%E5%BA%93/">数据库</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">字数总计:</span><span class="word-count">4.1k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>13分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title="VictoriaMetrics存储机制"><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">阅读量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div><div id="post-top-cover"><img class="nolazyload" id="post-top-bg" src="background-image: url('https://image.wangteng.space/image/202408021704265.jpeg')"></div></header><main class="layout" id="content-inner"><div id="post"><article class="post-content" id="article-container"><h3 id="1-整体架构"><a href="#1-整体架构" class="headerlink" title="1.整体架构"></a>1.整体架构</h3><p>VictoriaMetrics的集群主要由vmstorage、vminsert、vmselect等三部分组成，其中，vmstorage 负责提供数据存储服务; vminsert 是数据存储 vmstorage 的代理，使用一致性hash算法进行写入分片； vmselect 负责数据查询，根据输入的查询条件从 vmstorage 中查询数据。</p>
+<p>VictoriaMetrics的这个三个组件每个组件都可以单独进行扩展，并运行在大多数合适软件上。vmstorage采用shared-nothing架构，优点是 vmstorage的节点相互之间无感知，相互之间无需通信，不共享任何数据，增加了集群的可用性、简化了集群的运维和集群的扩展。<br><img src="https://image.wangteng.space/image/202408291002855.png"></p>
+<p>另外，VictoriaMetrics集群支持多个隔离的租户特性，又名命名空间。租户通过accountID (或者accountID:projectID) 来标识，这些ID放在请求URL中。有关VictoriaMetrics租户的一些事实：</p>
+<ul>
+<li>每个accountID和projectID由[0 .. 2 ^ 32）范围内的任意32位整数标识。如果缺少projectID，则会将其自动分配为0。预计有关租户的其他信息（例如身份验证令牌，租户名称，限制，计费等）将存储在单独的关系数据库中。此数据库必须由位于VictoriaMetrics群集前面的单独服务（例如vmauth）管理。</li>
+<li>将第一个数据点写入给定租户时，将自动创建租户。</li>
+<li>所有租户的数据平均分布在可用的vmstorage节点之间。当不同的租户具有不同的数据量和不同的查询负载时，这可以保证在vmstorage节点之间平均负载。</li>
+</ul>
+<p>整体上来说，VictoriaMetrics支持多租户，但租户的信息需要使用额外的关系型数据库来存储，且VictoriaMetrics不支持在单个请求中查询多个租户。</p>
+<h3 id="2-数据模型"><a href="#2-数据模型" class="headerlink" title="2.数据模型"></a>2.数据模型</h3><p>开门见山，<strong>VictoriaMetrics采用的数据模型是单值模型，且只支持浮点数指标</strong>。那么到底什么是单值模型呢？目前，常见的时序数据库的数据模型，主要分成单值模型和多值模型。这里简单说明下单值模型和多值模型，整体上，可以认为单值模型是多值模型的一个特例。</p>
+<p>单值模型是根据<strong>业务指标数据</strong>建模，按照单个指标的细粒度进行数据使用和逻辑存储，如下图所示，一行数据只有一个指标值，即value列。目前采用单值模型的时序数据库，有OpenTSDB、 KairosDB、Prometheus等。<br><img src="https://image.wangteng.space/image/202408291034984.webp"><br>多值的模型则是针对<strong>数据源</strong>建模，我们每一行数据针对的是一个数据源，它的被测量的多个指标在同一列上，如下图所示，一行数据有多个指标值，即有cpu和io两列。目前采用多值模型的时序数据库，有InfluxDB、TimescaleDB等。<br><img src="https://image.wangteng.space/image/202408291035496.webp"></p>
+<h3 id="3-磁盘目录"><a href="#3-磁盘目录" class="headerlink" title="3.磁盘目录"></a>3.磁盘目录</h3><p>VictoriaMetrics的根目录下主要包括4个目录或文件，如下图所示。其中，最主要的是数据目录data和索引目录indexdb，flock.lock文件为文件锁文件，用于VictoriaMetrics进程锁住文件，不允许别的进程进行修改目录或文件。<br><img src="https://image.wangteng.space/image/202408291038344.png"></p>
+<h2 id="3-1数据目录"><a href="#3-1数据目录" class="headerlink" title="3.1数据目录"></a>3.1数据目录</h2><p>数据目录data的具体结构，如下图所示，在图中使用红色文字，对主要目录或文件做了简单说明，其中最主要的是<strong>big</strong>目录和<strong>small</strong>目录，这两个目录的结构是一样的。其中，在VictoriaMetrics中，使用table来表示的数据或者索引的根目录，而实际上VictoriaMetrics中没有实际的表table级别目录。<br><img src="https://image.wangteng.space/image/202408291039818.webp"></p>
+<p>在small目录下，以月为单位不断生成partition目录，比如上图中的2020_11目录，对应的实现在源码lib&#x2F;storage&#x2F;partition.go中。partition目录包括part目录、临时目录tmp、 事务目录txn等三个目录。</p>
+<p>内存中的数据每刷盘一次就会生成一个part目录，如上图中的”708_354_20201103102134.255_20201103102149.255_1643F83394CA24A7”，目录名中的708表示这个目录下包含的数据行数rowsCount, 目录名中的354表示这个目录中包含的数据块数blocksCount, 20201103102134.255表示目录中包含的数据的最小时间戳，20201103102149.255表示目录中包含的数据的最大时间戳，1643F83394CA24A7是生成这个目录时的系统纳秒时间戳的16进制表示，对应的实现逻辑在源码lib&#x2F;storage&#x2F;part.go中；</p>
+<p>1.为何要分成big和small目录, 或者说big目录和small中的数据关系是什么？</p>
+<p>在VictoriaMetrics中，small目录和big目录都会周期性检查，是否需要做part的合并。VictoriaMetrics默认每个10ms检查一次partition目录下的part是否需要做merge。如果检查出有满足merge条件的parts，则这些parts合并为一个part。如果没有满足条件的part进行merge，则以10ms为基进行指数休眠，最大休眠时间为10s。</p>
+<p>VictoriaMetrics在写数据时，先写入在small目录下的相应partition目录下面的，small目录下的每个partition最多256个part。VictoriaMetrics在Compaction时，默认一次最多合并15个part，且small目录下的part最多包含1000W行数据，即1000W个数据点。因此，当一次待合并的parts中包含的行数超过1000W行时，其合并的输出路径为big目录下的同名partition目录下。</p>
+<p>因此，big目录下的数据由small目录下的数据在后台compaction时合并生成的。</p>
+<p>2.为什么要分成big目录和small目录呢？</p>
+<p>这个主要是从磁盘空间占用上来考虑的。时序数据经常读取最近写入的数据，较少读历史数据。而且，时序数据的数据量比较大，通常会使用压缩算法进行压缩。</p>
+<p>数据进行压缩后，读取时需要解压，采用不同级别的压缩压缩算法其解压速度不一样，通常压缩级别越高，其解压速度越慢。在VictoriaMetrics在时序压缩的基础上，又采用了ZSTD这个通用压缩算法进一步压缩了数据，以提高压缩率。在small目录中的part数据，采用的是低级别的ZSTD，而big目录下的数据，采用的是高级别的ZSTD。</p>
+<p>因此，VictoriaMetrics分成small目录和big目录，主要是兼顾近期数据的读取和历史数据的压缩率。</p>
+<h2 id="3-2索引目录"><a href="#3-2索引目录" class="headerlink" title="3.2索引目录"></a>3.2索引目录</h2><p>索引目录indexdb的具体结构，如下图所示，在图中使用红色文字，对主要目录或文件做了简单说明。与数据目录不同的是，indexdb目录下由多个table目录，每个table目录代表一个完整的自治的索引，每个table目录下，又有多个不同的part目录，part命名方式比较简单，有文件包含的item数itemsCount和block数blocksCount, 以及根据系统纳秒时间戳自增生成的mergeIdx的16进制表示。<br><img src="https://image.wangteng.space/image/202408291044947.webp"><br>indexdb下面的形如”1643F4F397B53DEE”是怎么生成的，或者什么时候切换新的目录写索引的呢？VictoriaMetrics会根据用户设置的数据保留周期retention来定期滚动索引目录，当前一个索引目录的保留时间到了，就会切换一个新的目录，重新生成索引。</p>
+<h3 id="4-文件格式"><a href="#4-文件格式" class="headerlink" title="4. 文件格式"></a>4. 文件格式</h3><p>在介绍具体的文件格式之前，不得不提下VictoriaMetrics对于写入数据的处理过程。下图是VictoriaMetrics支持的Prometheus协议的一个写入示例。<br><img src="https://image.wangteng.space/image/202408291046519.webp"><br>VictoriaMetrics在接受到写入请求时，会对请求中包含的时序数据做转换处理，如下图所示。首先先根据包含metric和labels的MetricName生成一个唯一标识TSID，然后metric + labels + TSID作为索引index， TSID + timestamp + value作为数据data，最后索引index和数据data分别进行存储和检索。<br><img src="https://image.wangteng.space/image/202408291049820.webp"></p>
+<p>因此，VictoriaMetrics的数据整体上分成索引和数据两个部分，因此文件格式整体上会有两个部分。其中，索引部分主要是用于支持按照label或者tag进行多维检索。与大多数时序数据库的数据组织方式一样，比如InfluxDB、Prometheus、OpenTSDB等，VictoriaMetrics也是按时间线来组织数据的，即数据存储时，先将数据按TSID进行分组，然后每个TSID的包含的数据点各自使用列式压缩存储。</p>
+<h2 id="4-1-索引文件"><a href="#4-1-索引文件" class="headerlink" title="4.1 索引文件"></a>4.1 索引文件</h2><p>VictoriaMetrics每次内存Flush或者后台Merge时生成的索引part，主要包含metaindex.bin、index.bin、lens.bin、items.bin等4个文件。这四个文件的关系如下图所示, metaindex.bin文件通过metaindex_row索引index.bin文件，index.bin文件通过indexBlock中的blockHeader同时索引lens.bin文件和items.bin文件。<br><img src="https://image.wangteng.space/image/202408291051537.webp"></p>
+<p>metaindex.bin文件中，包含一系列的metaindex_row， 每个metaindex_row中包含最小项firstItem、索引块包含的块头部数blockHeadersCount、索引块偏移indexBlockOffset、索引块大小indexBlockSize。</p>
+<ul>
+<li>metaindex_row在文件中的位置按照firstItem的大小的字典序排序存储，以支持二分检索；</li>
+<li>metaindex.bin文件使用ZSTD进行压缩；</li>
+<li>metaindex.bin文件中的内容在part打开时，会全部读出加载至内存中，以加速查询过滤；</li>
+<li>metaindex_row包含的firstItem为其索引的IndexBlock中所有blockHeader中的字典序最小的firstItem；</li>
+<li>查找时根据firstItem进行二分检索；</li>
+</ul>
+<p>index.bin文件中，包含一系列的indexBlock, 每个indexBlock又包含一系列blockHeader，每个blockHeader的包含item的公共前缀commonPrefix、最小项firstItem、itemsData的序列化类型marshalType、itemsData包含的item数、item块的偏移itemsBlockOffset等内容。</p>
+<ul>
+<li>每个indexBlock使用ZSTD压缩算法进行压缩；</li>
+<li>在indexBlock中查找时，根据firstItem进行二分检索blockHeader；</li>
+</ul>
+<p>items.bin文件中，包含一系列的itemsData, 每个itemsData又包含一系列的item。</p>
+<ul>
+<li>itemsData会根据情况是否使用ZTSD压缩，当item个数小于2时，或者itemsData的长度小于64字节时，不压缩；当itemsData使用ZSTD压缩后的大小，大于原始itemsData的0.9倍时，则不压缩，否则使用ZSTD算法进行压缩。</li>
+<li>每个item在存储时，去掉了blockHeader中的公共前缀commonPrefix以提高压缩率。</li>
+</ul>
+<p>lens.bin文件中，包含一系列的lensData, 每个lensData又包含一系列8字节的长度len， 长度len标识items.bin文件中对应item的长度。在读取或者需要解析itemsData中的item时，先要读取对应的lensData中对应的长度len。 当itemsData进行压缩时，lensData会先使用异或算法进行压缩，然后再使用ZSTD算法进一步压缩。</p>
+<p>VictoriaMetrics索引文件都是围绕着item来组织的，那么item的结构是什么样子的？或者item的种类有哪些？ 在VictoriaMetrics中item的整体上是一个KeyValue结构的字节数组，共计有7种类型，每种类型的item通过固定前缀来区分，前缀类型如下图所示。<br><img src="https://image.wangteng.space/image/202408291052206.webp"><br>VictoriaMetrics是怎么基于item支持tag多维检索的呢？ 这里就不得不提下VictoriaMetrics的TSID的生成过程。</p>
+<p>VictoriaMetrics的MetricName的结构如下所示，包含MetricGroup字节数组和Tag数组，其中，MetricGroup是可选的，每个Tag由Key和Value等字节数组构成。<br><img src="https://image.wangteng.space/image/202408291057528.webp"></p>
+<p>VictoriaMetrics的TSID的结构如下所示，包含MetricGroupID，JobID，InstanceID，MetricID等四个字段，其中除了MetricID外，其他三个字段都是可选的。这个几个ID的生成方法如下：</p>
+<ul>
+<li>metricGroupID根据MetricName中的MetricGroup使用xxhash的sum64算法生成。</li>
+<li>JobID和InstanceID分别由MetricName中的tag的第一个tag和第二个tag使用xxhash的sum64算法生成。为什么使用第一个tag和第二个tag？这是因为VictoriaMetrics在写入时，将写入请求中的JobID和InstanceID放在了Tag数组的第一个和第二个位置。</li>
+<li>MetricID，使用VictoriaMetrics进程启动时的系统纳秒时间戳自增生成。<br><img src="https://image.wangteng.space/image/202408291057433.webp"></li>
+</ul>
+<p>因为TSID中除了MetricID外，其他字段都是可选的，因此TSID中可以始终作为有效信息的只有metricID，因此VictoriaMetrics的在构建tag到TSID的字典过程中，是直接存储的tag到metricID的字典。</p>
+<p>以写入http_requests_total{status&#x3D;”200”, method&#x3D;”GET”}为例，则MetricName为http_requests_total{status&#x3D;”200”, method&#x3D;”GET”}， 假设生成的TSID为{metricGroupID&#x3D;0, jobID&#x3D;0, instanceID&#x3D;0, metricID&#x3D;51106185174286}，则VictoriaMetrics在写入时就构建了如下几种类型的索引item，其他类型的索引item是在后台或者查询时构建的。</p>
+<ul>
+<li>metricName -&gt; TSID, 即http_requests_total{status&#x3D;”200”, method&#x3D;”GET”} -&gt; {metricGroupID&#x3D;0, jobID&#x3D;0, instanceID&#x3D;0, metricID&#x3D;51106185174286}</li>
+<li>metricID -&gt; metricName，即51106185174286 -&gt; http_requests_total{status&#x3D;”200”, method&#x3D;”GET”}</li>
+<li>metricID -&gt; TSID，即51106185174286 -&gt; {metricGroupID&#x3D;0, jobID&#x3D;0, instanceID&#x3D;0, metricID&#x3D;51106185174286}</li>
+<li>tag -&gt; metricID，即 status&#x3D;”200” -&gt; 51106185174286, method&#x3D;”GET” -&gt; 51106185174286, “” &#x3D; http_requests_total -&gt; 51106185174286<br>有了这些索引的item后，就可以支持基于tag的多维检索了，在当给定查询条件http_requests_total{status&#x3D;”200”}时，VictoriaMetrics先根据给定的tag条件，找出每个tag的metricID列表，然后求所有tag的metricID列表的交集，然后根据交集中的metricID，再到索引文件中检索出TSID，根据TSID就可以到数据文件中查询数据了，在返回结果之前，再根据TSID中的metricID，到索引文件中检索出对应的写入时的原始MetircName。</li>
+</ul>
+<p>但是由于VictoriaMetrics的tag到metricID的字典，没有将相同tag的所有metricID放在一起存储，在检索时，一个tag可能需要查询多次才能得到完整的metricID列表。另外查询出metricID后，还要再到索引文件中去检索TSID才能去数据文件查询数据，又增加了一次IO开销。这样来看的话，VictoriaMetrics的索引文件在检索时，如果命中的时间线比较多的情况下，其IO开销会比较大，查询延迟也会比较高。</p>
+<h2 id="4-2-数据文件"><a href="#4-2-数据文件" class="headerlink" title="4.2 数据文件"></a>4.2 数据文件</h2><p>VictoriaMetrics每次内存Flush或者后台Merge时生成的数据part，包含metaindex.bin、index.bin、timestamps.bin、values.bin等4个文件。这四个文件的关系如下所示。metaindex.bin文件索引index.bin文件，index.bin文件同时索引timestamps.bin和values.bin文件。<br><img src="https://image.wangteng.space/image/202408291059126.webp"><br>metaindex.bin文件中，包含一系列的metaindex_row， 每个metaindex_row中包含时间线标识TSID、最小时间戳minTimestamp、最大时间戳maxTimestamp、索引块偏移indexBlockOffset、索引块大小indexBlockSize、索引块包含的块头部数blockHeadersCount。</p>
+<ul>
+<li>metaindex_row在文件中的位置按照TSID的大小的字典序排序存储；</li>
+<li>metaindex.bin文件使用ZSTD进行压缩；</li>
+<li>metaindex.bin文件中的内容在part打开时，会全部读出加载至内存中，以加速查询过滤；</li>
+<li>metaindex_row包含时间线标识TSID为其索引的IndexBlock中所有blockHeader中的最小时间标识TSID；</li>
+<li>metaindex_row包含最小时间戳minTimestamp为其索引的IndexBlock中所有blockHeader中的最小时间戳minTimestamp；</li>
+<li>metaindex_row包含最大时间戳maxTimestamp为其索引的IndexBlock中所有blockHeader中的最大时间戳maxTimestamp；</li>
+<li>查找时根据TSID进行二分检索；</li>
+</ul>
+<p>index.bin文件中，包含一系列的indexBlock, 每个indexBlock又包含一系列blockHeader，每个blockHeader的包含时间线标识TSID、最小时间戳minTimestamp、最大时间戳maxTimestamp、第一个指标值firstValue、时间戳数据块偏移timestampsBlockOffset、指标值数据块偏移valuesBlockOffset等内容。</p>
+<ul>
+<li>每个indexBlock使用ZSTD压缩算法进行压缩；</li>
+<li>查找时，线性遍历blockHeader查找TSID；</li>
+</ul>
+<p>timestamps.bin文件中，包含一系列时间线的时间戳压缩块timestampsData; values.bin文件中，包含的一系列时间线的指标值压缩块valuesData。 其中，timestampsData和values.data会根据时序数据特征进行压缩，整体上的压缩思路是：先做时序压缩，然后在做通用压缩。比如，先做delta-of-delta计算或者异或计算，然后根据情况做zig-zag，最后再根据情况做一次ZSTD压缩，VictoriaMetrics支持的压缩算法或者类型主要有6种，如下图所示，压缩编码源码在lib&#x2F;encoding&#x2F;encoding.go文件中。<br><img src="https://image.wangteng.space/image/202408291100225.webp"></p>
+<p>VictoriaMetrics文档中提及在生产环境中，每个数据点（8字节时间戳 + 8字节value共计16字节）压缩后小于1个字节，最高可达 0.4字节，如下所示。<br><img src="https://image.wangteng.space/image/202408291100828.webp"></p>
+<h3 id="5-VictoriaMetrics总结"><a href="#5-VictoriaMetrics总结" class="headerlink" title="5. VictoriaMetrics总结"></a>5. VictoriaMetrics总结</h3><p>VictoriaMetrics的整体的存储设计还是不错的，比如数据时间分区、数据压缩率高、丰富的生态协议等。但VictoriaMetrics的标签索引、数据可靠性、支持的数据类型等方面还存在一些不足。比如，标签索引查询多次IO，可能在时间线数量非常多的场景下，其检索效率会比较低，且没有WAL，在写入时可能会存在数据丢失的风险。目前只支持浮点数类型，不支持布尔、字符串、字节数组等类型。</p>
+<p>为数不多介绍VictoriaMetrics机制原理的文章，保留进行学习。<br>转自<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/368912946">https://zhuanlan.zhihu.com/p/368912946</a></p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://blog.wangteng.space">Bingo_Teng</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://blog.wangteng.space/post/008.html">https://blog.wangteng.space/post/008.html</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来自 <a href="https://blog.wangteng.space" target="_blank">Bingo大侠</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/VictoriaMetrics/">VictoriaMetrics</a></div><div class="post_share"><div class="social-share" data-image="https://image.wangteng.space/image/202408291002829vm.webp" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.3/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.3/sharejs/dist/js/social-share.min.js" defer></script></div></div><div class="post-reward"><div class="reward-button"><i class="fas fa-qrcode"></i>赞助</div><div class="reward-main"><ul class="reward-all"><li class="reward-item"><a href="https://image.wangteng.space/image/wechat.jpg" target="_blank"><img class="post-qr-code-img" src="https://image.wangteng.space/image/wechat.jpg" alt="wechat"/></a><div class="post-qr-code-desc">wechat</div></li><li class="reward-item"><a href="https://image.wangteng.space/image/alipay.jpg" target="_blank"><img class="post-qr-code-img" src="https://image.wangteng.space/image/alipay.jpg" alt="alipay"/></a><div class="post-qr-code-desc">alipay</div></li></ul></div></div><nav class="pagination-post" id="pagination"><div class="next-post pull-full"><a href="/post/007.html" title="Pulsar的消息保留和过期策略"><img class="cover" src="https://image.wangteng.space/image/202408021649982.jpeg" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="pagination-info"><div class="label">下一篇</div><div class="next_info">Pulsar的消息保留和过期策略</div></div></a></div></nav><hr class="custom-hr"/><div id="post-comment"><div class="comment-head"><div class="comment-headline"><i class="fas fa-comments fa-fw"></i><span> 评论</span></div></div><div class="comment-wrap"><div><div id="twikoo-wrap"></div></div></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info"><div class="is-center"><div class="avatar-img"><img src="https://image.wangteng.space/image/202408021453686.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info__name">Bingo_Teng</div><div class="author-info__description">2024年的理想开始实现了吗？</div></div><div class="card-info-data site-data is-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">8</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">7</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">4</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/wangteng0906"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons is-center"><a class="social-icon" href="https://github.com/wangteng0906" target="_blank" title="Github"><i class="fab fa-github" style="color: #24292e;"></i></a><a class="social-icon" href="mailto:1364695199@qq.com" target="_blank" title="Email"><i class="fas fa-envelope" style="color: #4a7dbe;"></i></a><a class="social-icon" href="/1364695199" target="_blank" title="QQ"><i class="fa-brands fa-qq" style="color: #2c9678;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">如果阅读过程中遇到了问题，请及时评论或者留言，看到了会在第一时间给出回复。</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E6%95%B4%E4%BD%93%E6%9E%B6%E6%9E%84"><span class="toc-number">1.</span> <span class="toc-text">1.整体架构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E6%95%B0%E6%8D%AE%E6%A8%A1%E5%9E%8B"><span class="toc-number">2.</span> <span class="toc-text">2.数据模型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E7%A3%81%E7%9B%98%E7%9B%AE%E5%BD%95"><span class="toc-number">3.</span> <span class="toc-text">3.磁盘目录</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-1%E6%95%B0%E6%8D%AE%E7%9B%AE%E5%BD%95"><span class="toc-number"></span> <span class="toc-text">3.1数据目录</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-2%E7%B4%A2%E5%BC%95%E7%9B%AE%E5%BD%95"><span class="toc-number"></span> <span class="toc-text">3.2索引目录</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#4-%E6%96%87%E4%BB%B6%E6%A0%BC%E5%BC%8F"><span class="toc-number">1.</span> <span class="toc-text">4. 文件格式</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-1-%E7%B4%A2%E5%BC%95%E6%96%87%E4%BB%B6"><span class="toc-number"></span> <span class="toc-text">4.1 索引文件</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-2-%E6%95%B0%E6%8D%AE%E6%96%87%E4%BB%B6"><span class="toc-number"></span> <span class="toc-text">4.2 数据文件</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-VictoriaMetrics%E6%80%BB%E7%BB%93"><span class="toc-number">1.</span> <span class="toc-text">5. VictoriaMetrics总结</span></a></li></ol></div></div><div class="card-widget card-post-series"><div class="item-headline"><i class="fa-solid fa-layer-group"></i><span>系列文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/post/008.html" title="VictoriaMetrics存储机制"><img src="https://image.wangteng.space/image/202408291002829vm.webp" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="VictoriaMetrics存储机制"></a><div class="content"><a class="title" href="/post/008.html" title="VictoriaMetrics存储机制">VictoriaMetrics存储机制</a><time datetime="2024-08-29T01:52:42.769Z" title="发表于 2024-08-29 09:52:42">2024-08-29</time></div></div></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/post/008.html" title="VictoriaMetrics存储机制"><img src="https://image.wangteng.space/image/202408291002829vm.webp" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="VictoriaMetrics存储机制"/></a><div class="content"><a class="title" href="/post/008.html" title="VictoriaMetrics存储机制">VictoriaMetrics存储机制</a><time datetime="2024-08-29T01:52:42.769Z" title="发表于 2024-08-29 09:52:42">2024-08-29</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/post/007.html" title="Pulsar的消息保留和过期策略"><img src="https://image.wangteng.space/image/202408021649982.jpeg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Pulsar的消息保留和过期策略"/></a><div class="content"><a class="title" href="/post/007.html" title="Pulsar的消息保留和过期策略">Pulsar的消息保留和过期策略</a><time datetime="2024-07-18T07:18:53.630Z" title="发表于 2024-07-18 15:18:53">2024-07-18</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/post/006.html" title="Nginx之localtion规则与地址重写（超详细实例篇）"><img src="https://image.wangteng.space/image/202408021648933.jpeg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Nginx之localtion规则与地址重写（超详细实例篇）"/></a><div class="content"><a class="title" href="/post/006.html" title="Nginx之localtion规则与地址重写（超详细实例篇）">Nginx之localtion规则与地址重写（超详细实例篇）</a><time datetime="2024-07-09T09:08:49.342Z" title="发表于 2024-07-09 17:08:49">2024-07-09</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/post/005.html" title="Centos7上PXE服务器的搭建部署"><img src="https://image.wangteng.space/image/202408021647669.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Centos7上PXE服务器的搭建部署"/></a><div class="content"><a class="title" href="/post/005.html" title="Centos7上PXE服务器的搭建部署">Centos7上PXE服务器的搭建部署</a><time datetime="2024-07-05T09:36:48.016Z" title="发表于 2024-07-05 17:36:48">2024-07-05</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/post/004.html" title="如何使用shell实现frp自动部署以及生成相应客户端服务端配置文件"><img src="https://image.wangteng.space/image/202408021647669.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="如何使用shell实现frp自动部署以及生成相应客户端服务端配置文件"/></a><div class="content"><a class="title" href="/post/004.html" title="如何使用shell实现frp自动部署以及生成相应客户端服务端配置文件">如何使用shell实现frp自动部署以及生成相应客户端服务端配置文件</a><time datetime="2024-07-05T09:33:42.649Z" title="发表于 2024-07-05 17:33:42">2024-07-05</time></div></div></div></div></div></div></main><footer id="footer"><div id="footer-wrap"><div id="ft"><div class="ft-item-1"><div class="t-top"><div class="t-t-l"><p class="ft-t t-l-t">御剑-</p><div class="bg-ad"><div>希望其实就在每个人心里，一个乐观的人，即使在失意灰暗的日子里，也能在黑暗中看到希望的光亮；一个悲观的人，即使是在一片大好的境况中，也担心会有无数的艰难险阻，阻拦在通向成功的路上。</div><div class="btn-xz-box"><a class="btn-xz" target="_blank" rel="noopener" href="https://home.wangteng.space">大侠的港湾</a></div></div></div><div class="t-t-r"><p class="ft-t t-l-t">修仙导航</p><ul class="ft-links"><li><a href="https://blog.wangteng.space/articles/hexo1600/">建站指南</a><a href="https://blog.wangteng.space/nav.html">网址导航</a></li><li><a href="https://blog.wangteng.space/sponsorWall/">来杯咖啡</a><a href="https://blog.wangteng.space/comments/">留点什么</a></li><li><a href="https://blog.wangteng.space/about/">关于博主</a><a href="https://blog.wangteng.space/archives/">文章归档</a></li><li><a href="https://blog.wangteng.space/categories/">文章分类</a><a href="https://blog.wangteng.space/tags/">文章标签</a></li><li><a href="https://blog.wangteng.space/Gallery/">我的相册</a><a href="https://blog.wangteng.space/bangumis/">我的追番</a></li><li><a href="https://blog.wangteng.space/specialEffects/">一些特效</a><a href="https://blog.wangteng.space/wallpaper/">一些壁纸</a></li></ul></div></div></div><div class="ft-item-2"><p class="ft-t">推荐友链</p><div class="ft-img-group"><div class="img-group-item"><a href="https://blog.wangteng.space/"><img src="https://image.wangteng.space/image/202408021453686.jpg" alt=""/></a></div><div class="img-group-item"><a target="_blank" rel="noopener" href="https://fe32.top/"><img src="https://bu.dusays.com/2022/05/02/626f92e193879.jpg" alt=""/></a></div><div class="img-group-item"><a target="_blank" rel="noopener" href="https://blog.anheyu.com/"><img src="https://npm.elemecdn.com/anzhiyu-blog-static@1.0.4/img/avatar.jpg" alt=""/></a></div><div class="img-group-item"><a target="_blank" rel="noopener" href="https://dusays.com/"><img src="https://cdn.dusays.com/avatar.png" alt=""/></a></div><div class="img-group-item"><a target="_blank" rel="noopener" href="https://www.yt-blog.top/9952/"><img src="https://bu.dusays.com/2024/01/26/65b2f4daaaf4c.webp" alt=""/></a></div><div class="img-group-item"><a target="_blank" rel="noopener" href="https://butterfly.js.org/"><img src="https://butterfly.js.org/img/avatar.png" alt=""/></a></div><div class="img-group-item"><a target="_blank" rel="noopener" href="https://www.fomal.cc/"><img src="https://sourcebucket.s3.bitiful.net/img/avatar.webp" alt=""/></a></div><div class="img-group-item"><a target="_blank" rel="noopener" href="https://blog.zhheo.com/"><img src="https://blog.zhheo.com/img/pwa/144.webp" alt=""/></a></div></div></div></div><div class="copyright"><a target="_blank" href="https://www.upyun.com/?utm_source=lianmeng&utm_medium=referral"><img style="position:relative;top:-1px;" src="https://npm.elemecdn.com/lql_static@latest/upyun/logo.png" data-lazy-src="https://npm.elemecdn.com/lql_static@latest/upyun/logo.png" align="absmiddle" width="60px" height="30px" data-ll-status="loaded" class="entered loaded"</a></a>&nbsp&nbsp&nbsp&nbsp;<a target="_blank" href="https://beian.mps.gov.cn/#/query/webSearch?code=61052402610640"><img style="position:relative;top:-1px;" src="https://image.wangteng.space/image/beianlogo.png" data-lazy-src="https://image.wangteng.space/image/beianlogo.png" align="absmiddle" width="16px" height="16px" data-ll-status="loaded" class="entered loaded"</a>&nbsp;<a target="_blank" href="https://beian.mps.gov.cn/#/query/webSearch?code=61052402610640">陕公网安备61052402610640</a>&nbsp&nbsp&nbsp&nbsp;<a target="_blank" href="https://beian.miit.gov.cn/">陕ICP备2024042922号</a>&nbsp&nbsp&nbsp&nbsp&copy;2024  <i id="heartbeat" class="fa fas fa-heartbeat"></i> Bingo_Teng</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="浅色和深色模式转换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><a id="to_comment" href="#post-comment" title="直达评论"><i class="fas fa-comments"></i></a><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=4.14.0-b3"></script><script src="/js/main.js?v=4.14.0-b3"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0.35/dist/fancybox/fancybox.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/instant.page@5.2.0/instantpage.min.js" type="module"></script><div class="js-pjax"><script>(() => {
+  const runMermaid = (ele) => {
+    window.loadMermaid = true
+    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default'
+
+    Array.from(ele).forEach((item, index) => {
+      const mermaidSrc = item.firstElementChild
+      const mermaidThemeConfig = '%%{init:{ \'theme\':\'' + theme + '\'}}%%\n'
+      const mermaidID = 'mermaid-' + index
+      const mermaidDefinition = mermaidThemeConfig + mermaidSrc.textContent
+
+      const renderFn = mermaid.render(mermaidID, mermaidDefinition)
+
+      const renderV10 = () => {
+        renderFn.then(({svg}) => {
+          mermaidSrc.insertAdjacentHTML('afterend', svg)
+        })
+      }
+
+      const renderV9 = svg => {
+        mermaidSrc.insertAdjacentHTML('afterend', svg)
+      }
+
+      typeof renderFn === 'string' ? renderV9(renderFn) : renderV10()
+    })
+  }
+
+  const codeToMermaid = () => {
+    const codeMermaidEle = document.querySelectorAll('pre > code.mermaid')
+    if (codeMermaidEle.length === 0) return
+    
+    codeMermaidEle.forEach(ele => {
+      const newEle = document.createElement('div')
+      newEle.className = 'mermaid-wrap'
+      newEle.innerHTML = `<pre class="mermaid-src" hidden>${ele.textContent}</pre>`
+      ele.parentNode.replaceWith(newEle)
+    })
+  }
+
+  const loadMermaid = () => {
+    if (false) codeToMermaid()
+    const $mermaid = document.querySelectorAll('#article-container .mermaid-wrap')
+    if ($mermaid.length === 0) return
+
+    const runMermaidFn = () => runMermaid($mermaid)
+    btf.addGlobalFn('themeChange', runMermaidFn, 'mermaid')
+    window.loadMermaid ? runMermaidFn() : btf.getScript('https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js').then(runMermaidFn)
+  }
+  
+  btf.addGlobalFn('encrypt', loadMermaid, 'mermaid')
+  window.pjax ? loadMermaid() : document.addEventListener('DOMContentLoaded', loadMermaid)
+})()</script><script>(() => {
+  const getCount = () => {
+    const countELement = document.getElementById('twikoo-count')
+    if(!countELement) return
+    twikoo.getCommentsCount({
+      envId: 'https://twikoo.wangteng.space/',
+      region: '',
+      urls: [window.location.pathname],
+      includeReply: false
+    }).then(res => {
+      countELement.textContent = res[0].count
+    }).catch(err => {
+      console.error(err)
+    })
+  }
+
+  const init = () => {
+    twikoo.init(Object.assign({
+      el: '#twikoo-wrap',
+      envId: 'https://twikoo.wangteng.space/',
+      region: '',
+      onCommentLoaded: () => {
+        btf.loadLightbox(document.querySelectorAll('#twikoo .tk-content img:not(.tk-owo-emotion)'))
+      }
+    }, null))
+
+    GLOBAL_CONFIG_SITE.isPost && getCount()
+  }
+
+  const loadTwikoo = () => {
+    if (typeof twikoo === 'object') setTimeout(init,0)
+    else btf.getScript('https://cdn.jsdelivr.net/npm/twikoo@1.6.32/dist/twikoo.all.min.js').then(init)
+  }
+
+  if ('Twikoo' === 'Twikoo' || !true) {
+    if (true) btf.loadComment(document.getElementById('twikoo-wrap'), loadTwikoo)
+    else loadTwikoo()
+  } else {
+    window.loadOtherComment = loadTwikoo
+  }
+})()</script></div><script>window.addEventListener('load', () => {
+  const changeContent = (content) => {
+    if (content === '') return content
+
+    content = content.replace(/<img.*?src="(.*?)"?[^\>]+>/ig, '[图片]') // replace image link
+    content = content.replace(/<a[^>]+?href=["']?([^"']+)["']?[^>]*>([^<]+)<\/a>/gi, '[链接]') // replace url
+    content = content.replace(/<pre><code>.*?<\/pre>/gi, '[代码]') // replace code
+    content = content.replace(/<[^>]+>/g,"") // remove html tag
+
+    if (content.length > 150) {
+      content = content.substring(0,150) + '...'
+    }
+    return content
+  }
+
+  const getComment = () => {
+    const runTwikoo = () => {
+      twikoo.getRecentComments({
+        envId: 'https://twikoo.wangteng.space/',
+        region: '',
+        pageSize: 6,
+        includeReply: true
+      }).then(function (res) {
+        const twikooArray = res.map(e => {
+          return {
+            'content': changeContent(e.comment),
+            'avatar': e.avatar,
+            'nick': e.nick,
+            'url': e.url + '#' + e.id,
+            'date': new Date(e.created).toISOString()
+          }
+        })
+
+        btf.saveToLocal.set('twikoo-newest-comments', JSON.stringify(twikooArray), 10/(60*24))
+        generateHtml(twikooArray)
+      }).catch(function (err) {
+        const $dom = document.querySelector('#card-newest-comments .aside-list')
+        $dom.textContent= "无法获取评论，请确认相关配置是否正确"
+      })
+    }
+
+    if (typeof twikoo === 'object') {
+      runTwikoo()
+    } else {
+      btf.getScript('https://cdn.jsdelivr.net/npm/twikoo@1.6.32/dist/twikoo.all.min.js').then(runTwikoo)
+    }
+  }
+
+  const generateHtml = array => {
+    let result = ''
+
+    if (array.length) {
+      for (let i = 0; i < array.length; i++) {
+        result += '<div class=\'aside-list-item\'>'
+
+        if (true) {
+          const name = 'src'
+          result += `<a href='${array[i].url}' class='thumbnail'><img ${name}='${array[i].avatar}' alt='${array[i].nick}'></a>`
+        }
+        
+        result += `<div class='content'>
+        <a class='comment' href='${array[i].url}' title='${array[i].content}'>${array[i].content}</a>
+        <div class='name'><span>${array[i].nick} / </span><time datetime="${array[i].date}">${btf.diffDate(array[i].date, true)}</time></div>
+        </div></div>`
+      }
+    } else {
+      result += '没有评论'
+    }
+
+    let $dom = document.querySelector('#card-newest-comments .aside-list')
+    $dom && ($dom.innerHTML= result)
+    window.lazyLoadInstance && window.lazyLoadInstance.update()
+    window.pjax && window.pjax.refresh($dom)
+  }
+
+  const newestCommentInit = () => {
+    if (document.querySelector('#card-newest-comments .aside-list')) {
+      const data = btf.saveToLocal.get('twikoo-newest-comments')
+      if (data) {
+        generateHtml(JSON.parse(data))
+      } else {
+        getComment()
+      }
+    }
+  }
+
+  newestCommentInit()
+  btf.addGlobalFn('pjaxComplete', newestCommentInit, 'twikoo_newestComment')
+})</script><div class="aplayer no-destroy" data-id="12267287378" data-server="netease" data-type="playlist" data-fixed="true" data-autoplay="false" data-lrcType="-1"> </div><script src="/js/custom.js"></script><script defer="defer" id="fluttering_ribbon" mobile="true" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.3/dist/canvas-fluttering-ribbon.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.3/dist/activate-power-mode.min.js"></script><script>POWERMODE.colorful = true;
+POWERMODE.shake = false;
+POWERMODE.mobile = false;
+document.body.addEventListener('input', POWERMODE);
+</script><script id="click-heart" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.3/dist/click-heart.min.js" async="async" mobile="true"></script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.3/metingjs/dist/Meting.min.js"></script><script>(() => {
+  const destroyAplayer = () => {
+    if (window.aplayers) {
+      for (let i = 0; i < window.aplayers.length; i++) {
+        if (!window.aplayers[i].options.fixed) {
+          window.aplayers[i].destroy()
+        }
+      }
+    }
+  }
+
+  const loadMeting = () => {
+    typeof loadMeting === 'function' && document.getElementsByClassName('aplayer').length && loadMeting()
+  }
+
+  btf.addGlobalFn('pjaxSend', destroyAplayer, 'destroyAplayer')
+  btf.addGlobalFn('pjaxComplete', loadMeting, 'loadMeting')
+})()</script><script src="https://cdn.jsdelivr.net/npm/pjax@0.2.8/pjax.min.js"></script><script>let pjaxSelectors = ["head > title","#config-diff","#body-wrap","#rightside-config-hide","#rightside-config-show",".js-pjax"]
+
+var pjax = new Pjax({
+  elements: 'a:not([target="_blank"]):not([href="/music/"]):not([href="/Gallery/wallpaper"]):not([href="/Gallery/marvel"]):not([href="/no-pjax/"])',
+  selectors: pjaxSelectors,
+  cacheBust: false,
+  analytics: false,
+  scrollRestoration: false
+})
+
+const triggerPjaxFn = (val) => {
+  if (!val) return
+  Object.values(val).forEach(fn => { fn() })
+}
+
+document.addEventListener('pjax:send', function () {
+
+  // removeEventListener
+  btf.removeGlobalFnEvent('pjax')
+  btf.removeGlobalFnEvent('themeChange')
+
+  //reset readmode
+  const $bodyClassList = document.body.classList
+  $bodyClassList.contains('read-mode') && $bodyClassList.remove('read-mode')
+
+  triggerPjaxFn(window.globalFn.pjaxSend)
+})
+
+document.addEventListener('pjax:complete', () => {
+  document.querySelectorAll('script[data-pjax]').forEach(item => {
+    const newScript = document.createElement('script')
+    const content = item.text || item.textContent || item.innerHTML || ""
+    Array.from(item.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value))
+    newScript.appendChild(document.createTextNode(content))
+    item.parentNode.replaceChild(newScript, item)
+  })
+
+  triggerPjaxFn(window.globalFn.pjaxComplete)
+})
+
+document.addEventListener('pjax:error', e => {
+  if (e.request.status === 404) {
+    pjax.loadUrl('/404.html')
+  }
+})</script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="algolia-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="search-wrap"><div id="algolia-search-input"></div><hr/><div id="algolia-search-results"><div id="algolia-hits"></div><div id="algolia-pagination"></div><div id="algolia-info"><div class="algolia-stats"></div><div class="algolia-poweredBy"></div></div></div></div></div><div id="search-mask"></div><script src="https://cdn.jsdelivr.net/npm/algoliasearch@4.23.2/dist/algoliasearch-lite.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/instantsearch.js@4.66.1/dist/instantsearch.production.min.js"></script><script src="/js/search/algolia.js?v=4.14.0-b3"></script></div></div></body></html>
