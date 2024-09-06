@@ -1,0 +1,513 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>日志系统新秀-Loki | Bingo大侠</title><meta name="author" content="Bingo_Teng,1364695199@qq.com"><meta name="copyright" content="Bingo_Teng"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="一、loki简介 Loki是 Grafana Labs 团队最新的开源项目，是一个水平可扩展，高可用性，多租户的日志聚合系统。它的设计非常经济高效且易于操作，因为它不会为日志内容编制索引，而是为每个日志流编制一组标签。项目受 Prometheus 启发，官方的介绍就是： Like Prometheus, but for logs ，类似于 Prometheus 的日志系统。 二、Loki 快速上手">
+<meta property="og:type" content="article">
+<meta property="og:title" content="日志系统新秀-Loki">
+<meta property="og:url" content="https://blog.wangteng.space/post/009.html">
+<meta property="og:site_name" content="Bingo大侠">
+<meta property="og:description" content="一、loki简介 Loki是 Grafana Labs 团队最新的开源项目，是一个水平可扩展，高可用性，多租户的日志聚合系统。它的设计非常经济高效且易于操作，因为它不会为日志内容编制索引，而是为每个日志流编制一组标签。项目受 Prometheus 启发，官方的介绍就是： Like Prometheus, but for logs ，类似于 Prometheus 的日志系统。 二、Loki 快速上手">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://image.wangteng.space/image/202409061423300loki.jpeg">
+<meta property="article:published_time" content="2024-08-30T02:58:47.230Z">
+<meta property="article:modified_time" content="2024-09-05T02:10:00.000Z">
+<meta property="article:author" content="Bingo_Teng">
+<meta property="article:tag" content="Loki">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://image.wangteng.space/image/202409061423300loki.jpeg"><link rel="shortcut icon" href="https://image.wangteng.space/image/202408021550021.png"><link rel="canonical" href="https://blog.wangteng.space/post/009.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//hm.baidu.com"/><link rel="preconnect" href="//fonts.googleapis.com" crossorigin=""/><link rel="preconnect" href="//busuanzi.ibruce.info"/><meta name="google-site-verification" content="cXGUmZ04GXw763C3yz8N7AKcULDeZogcpuYxVuhfgN0"/><meta name="baidu-site-verification" content="codeva-XY4OGiVs6L"/><link rel="stylesheet" href="/css/index.css?v=4.14.0-b3"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0.35/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>(()=>{
+      const saveToLocal = {
+        set: (key, value, ttl) => {
+          if (ttl === 0) return
+          const now = Date.now()
+          const expiry = now + ttl * 86400000
+          const item = {
+            value,
+            expiry
+          }
+          localStorage.setItem(key, JSON.stringify(item))
+        },
+      
+        get: key => {
+          const itemStr = localStorage.getItem(key)
+      
+          if (!itemStr) {
+            return undefined
+          }
+          const item = JSON.parse(itemStr)
+          const now = Date.now()
+      
+          if (now > item.expiry) {
+            localStorage.removeItem(key)
+            return undefined
+          }
+          return item.value
+        }
+      }
+      
+      window.btf = {
+        saveToLocal: saveToLocal,
+        getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+          const script = document.createElement('script')
+          script.src = url
+          script.async = true
+          script.onerror = reject
+          script.onload = script.onreadystatechange = function() {
+            const loadState = this.readyState
+            if (loadState && loadState !== 'loaded' && loadState !== 'complete') return
+            script.onload = script.onreadystatechange = null
+            resolve()
+          }
+
+          Object.keys(attr).forEach(key => {
+            script.setAttribute(key, attr[key])
+          })
+
+          document.head.appendChild(script)
+        }),
+
+        getCSS: (url, id = false) => new Promise((resolve, reject) => {
+          const link = document.createElement('link')
+          link.rel = 'stylesheet'
+          link.href = url
+          if (id) link.id = id
+          link.onerror = reject
+          link.onload = link.onreadystatechange = function() {
+            const loadState = this.readyState
+            if (loadState && loadState !== 'loaded' && loadState !== 'complete') return
+            link.onload = link.onreadystatechange = null
+            resolve()
+          }
+          document.head.appendChild(link)
+        }),
+
+        addGlobalFn: (key, fn, name = false, parent = window) => {
+          const pjaxEnable = true
+          if (!pjaxEnable && key.startsWith('pjax')) return
+
+          const globalFn = parent.globalFn || {}
+          const keyObj = globalFn[key] || {}
+    
+          if (name && keyObj[name]) return
+    
+          name = name || Object.keys(keyObj).length
+          keyObj[name] = fn
+          globalFn[key] = keyObj
+          parent.globalFn = globalFn
+        }
+      }
+    
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+      
+      const t = saveToLocal.get('theme')
+    
+        if (t === 'dark') activateDarkMode()
+        else if (t === 'light') activateLightMode()
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        if (asideStatus === 'hide') {
+          document.documentElement.classList.add('hide-aside')
+        } else {
+          document.documentElement.classList.remove('hide-aside')
+        }
+      }
+    
+      const detectApple = () => {
+        if(/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)){
+          document.documentElement.classList.add('apple')
+        }
+      }
+      detectApple()
+    })()</script><script>var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "https://hm.baidu.com/hm.js?abc12d17aaf88b289b4a545992353f24";
+  var s = document.getElementsByTagName("script")[0]; 
+  s.parentNode.insertBefore(hm, s);
+})();
+btf.addGlobalFn('pjaxComplete', () => {
+  _hmt.push(['_trackPageview',window.location.pathname])
+}, 'baidu_analytics')
+</script><link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Titillium+Web&amp;display=swap" media="print" onload="this.media='all'"><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: {"appId":"2MWYM2YI6M","apiKey":"4f970d28a5192c2c71154e54594b59a1","indexName":"search","hits":{"per_page":10},"languages":{"input_placeholder":"搜索文章","hits_empty":"找不到您查询的内容：${query}","hits_stats":"找到 ${hits} 条结果，用时 ${time} 毫秒"}},
+  localSearch: undefined,
+  translate: undefined,
+  noticeOutdate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":true,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制错误',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: true,
+    post: true
+  },
+  runtime: '天',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: {"limitCount":50,"languages":{"author":"作者: Bingo_Teng","link":"链接: ","source":"来源: Bingo大侠","info":"著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。"}},
+  lightbox: 'fancybox',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.11.1/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyload: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: true,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '日志系统新秀-Loki',
+  isPost: true,
+  isHome: false,
+  isHighlightShrink: false,
+  isToc: true,
+  postUpdate: '2024-09-05 10:10:00'
+}</script><link rel="stylesheet" href="/css/custom.css"><meta name="generator" content="Hexo 7.2.0"></head><body><div id="loading-box" onclick="document.getElementById(&quot;loading-box&quot;).classList.add(&quot;loaded&quot;)"><div class="loading-bg"><div class="loading-img"></div><div class="loading-image-dot"></div></div></div><script>const preloader = {
+  endLoading: () => {
+    document.body.style.overflow = 'auto';
+    document.getElementById('loading-box').classList.add("loaded")
+  },
+  initLoading: () => {
+    document.body.style.overflow = '';
+    document.getElementById('loading-box').classList.remove("loaded")
+
+  }
+}
+window.addEventListener('load',()=> { preloader.endLoading() })
+
+if (true) {
+  document.addEventListener('pjax:send', () => { preloader.initLoading() })
+  document.addEventListener('pjax:complete', () => { preloader.endLoading() })
+}</script><script>window.paceOptions = {
+  restartOnPushState: false
+}
+
+btf.addGlobalFn('pjaxSend', () => {
+  Pace.restart()
+}, 'pace_restart')
+
+</script><link rel="stylesheet" href="/css/progress_bar.css"/><script src="https://cdn.jsdelivr.net/npm/pace-js@1.2.4/pace.min.js"></script><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img is-center"><img src="https://image.wangteng.space/image/202408021453686.jpg" onerror="onerror=null;src='/img/friend_404.gif'" alt="avatar"/></div><div class="sidebar-site-data site-data is-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">9</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">8</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">5</div></a></div><hr class="custom-hr"/><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-archive"></i><span> 文章</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 时间轴</span></a></li><li><a class="site-page child" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></li><li><a class="site-page child" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></li></ul></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-heartbeat"></i><span> 娱乐</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/music/"><i class="fa-fw fas fa-music"></i><span> 音乐</span></a></li><li><a class="site-page child" href="/Gallery/"><i class="fa-fw fas fa-images"></i><span> 照片</span></a></li><li><a class="site-page child" href="/movies/"><i class="fa-fw fas fa-video"></i><span> 电影</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友链</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url('https://image.wangteng.space/image/202408021704265.jpeg')"><nav id="nav"><span id="blog-info"><a href="/" title="Bingo大侠"><span class="site-name">Bingo大侠</span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-home"></i><span> 首页</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-archive"></i><span> 文章</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/archives/"><i class="fa-fw fas fa-archive"></i><span> 时间轴</span></a></li><li><a class="site-page child" href="/tags/"><i class="fa-fw fas fa-tags"></i><span> 标签</span></a></li><li><a class="site-page child" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></li></ul></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-heartbeat"></i><span> 娱乐</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/music/"><i class="fa-fw fas fa-music"></i><span> 音乐</span></a></li><li><a class="site-page child" href="/Gallery/"><i class="fa-fw fas fa-images"></i><span> 照片</span></a></li><li><a class="site-page child" href="/movies/"><i class="fa-fw fas fa-video"></i><span> 电影</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友链</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">日志系统新秀-Loki</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2024-08-30T02:58:47.230Z" title="发表于 2024-08-30 10:58:47">2024-08-30</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2024-09-05T02:10:00.000Z" title="更新于 2024-09-05 10:10:00">2024-09-05</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E6%97%A5%E5%BF%97%E7%B3%BB%E7%BB%9F/">日志系统</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">字数总计:</span><span class="word-count">2.8k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>12分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title="日志系统新秀-Loki"><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">阅读量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div><div id="post-info"><h1 class="post-title">日志系统新秀-Loki</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2024-08-30T02:58:47.230Z" title="发表于 2024-08-30 10:58:47">2024-08-30</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2024-09-05T02:10:00.000Z" title="更新于 2024-09-05 10:10:00">2024-09-05</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E6%97%A5%E5%BF%97%E7%B3%BB%E7%BB%9F/">日志系统</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">字数总计:</span><span class="word-count">2.8k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>12分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title="日志系统新秀-Loki"><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">阅读量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div><div id="post-top-cover"><img class="nolazyload" id="post-top-bg" src="background-image: url('https://image.wangteng.space/image/202408021704265.jpeg')"></div></header><main class="layout" id="content-inner"><div id="post"><article class="post-content" id="article-container"><h2 id="一、loki简介"><a href="#一、loki简介" class="headerlink" title="一、loki简介"></a>一、loki简介</h2><p> Loki是 Grafana Labs 团队最新的开源项目，是一个水平可扩展，高可用性，多租户的日志聚合系统。它的设计非常经济高效且易于操作，因为它不会为日志内容编制索引，而是为每个日志流编制一组标签。项目受 Prometheus 启发，官方的介绍就是： Like Prometheus, but for logs ，类似于 Prometheus 的日志系统。</p>
+<h2 id="二、Loki-快速上手"><a href="#二、Loki-快速上手" class="headerlink" title="二、Loki 快速上手"></a>二、Loki 快速上手</h2><p>Loki 作为日志系统的后起之秀，设计上可以说非常优秀，设计的理念就是为了让日志聚合更简单，它被设计为非常经济高效且易于操作。它不索引日志的内容，而是为每个日志流设置一组标签。它主要由三部分组成。</p>
+<p>与其他日志聚合系统相比， Loki 具有下面的一些特性：</p>
+<figure class="highlight txt"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">不对日志进行全文索引。通过存储压缩非结构化日志和仅索引元数据， Loki 操作起来会更简</span><br><span class="line">单，更省成本。</span><br><span class="line">通过使用与 Prometheus 相同的标签记录流对日志进行索引和分组，这使得日志的扩展和操</span><br><span class="line">作效率更高。</span><br><span class="line">特别适合储存 Kubernetes Pod 日志 ; 诸如 Pod 标签之类的元数据会被自动删除和编入索引</span><br></pre></td></tr></table></figure>
+<h3 id="各日志收集组件简单对比"><a href="#各日志收集组件简单对比" class="headerlink" title="各日志收集组件简单对比"></a>各日志收集组件简单对比</h3><table>
+<thead>
+<tr>
+<th>名称</th>
+<th align="center">安装的组件</th>
+<th align="right">优点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>ELK&#x2F;EFK</td>
+<td align="center">elasticsearch、logstash、kibana 、filebeat、kafka、redis</td>
+<td align="right">支持自定义 grok 正则解析复杂日志内容；dashboard 支持主富的可视化展示</td>
+</tr>
+<tr>
+<td>Loki</td>
+<td align="center">grafana 、 loki 、 promtail</td>
+<td align="right">占用资源小； grafana 原生支持；查询速度快</td>
+</tr>
+</tbody></table>
+<p>官方地址：<a target="_blank" rel="noopener" href="https://grafana.com/oss/loki/">https://grafana.com/oss/loki/</a><br>文档地址： <a target="_blank" rel="noopener" href="https://grafana.com/docs/grafana/latest/features/datasources/loki/">https://grafana.com/docs/grafana/latest/features/datasources/loki/</a><br>git 地址： <a target="_blank" rel="noopener" href="https://github.com/grafana/loki/blob/master/docs/README.md">https://github.com/grafana/loki/blob/master/docs/README.md</a><br>下载地址： Releases · grafana&#x2F;loki (github.com)</p>
+<h3 id="第一步安装-Loki"><a href="#第一步安装-Loki" class="headerlink" title="第一步安装 Loki"></a>第一步安装 Loki</h3><p>简单介绍下 Loki ：<br>Grafana Loki 是一个日志聚合工具，它是功能齐全的日志堆栈的核心。<br>Loki 是一个为有效保存日志数据而优化的数据存储。日志数据的高效索引将 Loki 与其他日志系统区分开来，<br>与其他日志系统不同， Loki 索引是根据标签构建的，原始日志消息未编入索引。</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">yum</span> <span class="string">install</span> <span class="string">-y</span> <span class="string">https://github.com/grafana/loki/releases/download/v2.9.8/loki-2.9.8.x86_64.rpm</span></span><br><span class="line"><span class="comment"># 配置文件详解</span></span><br><span class="line">[<span class="string">getui@39-210</span> <span class="string">loki</span>]<span class="string">$</span> <span class="string">cat</span> <span class="string">config.yaml</span></span><br><span class="line"><span class="attr">auth_enabled:</span> <span class="literal">false</span></span><br><span class="line"><span class="attr">server:</span></span><br><span class="line">  <span class="attr">http_listen_port:</span> <span class="number">3200</span></span><br><span class="line"><span class="attr">querier:</span></span><br><span class="line">  <span class="comment"># 控制一个 Loki 实例上的最大并发查询数</span></span><br><span class="line">  <span class="attr">max_concurrent:</span> <span class="number">500</span></span><br><span class="line"><span class="attr">query_scheduler:</span></span><br><span class="line">  <span class="comment">#控制每个 Loki 租户（tenant）在集群范围内允许的最大查询请求数</span></span><br><span class="line">  <span class="attr">max_outstanding_requests_per_tenant:</span> <span class="number">4096</span></span><br><span class="line"><span class="attr">ingester:</span></span><br><span class="line">  <span class="attr">lifecycler:</span></span><br><span class="line">    <span class="attr">address:</span> <span class="number">172.16</span><span class="number">.39</span><span class="number">.210</span></span><br><span class="line">    <span class="attr">ring:</span></span><br><span class="line">      <span class="attr">kvstore:</span></span><br><span class="line">        <span class="attr">store:</span> <span class="string">inmemory</span></span><br><span class="line">      <span class="attr">replication_factor:</span> <span class="number">1</span></span><br><span class="line">    <span class="attr">final_sleep:</span> <span class="string">0s</span></span><br><span class="line">  <span class="attr">chunk_target_size:</span> <span class="number">104857600</span></span><br><span class="line">  <span class="attr">chunk_idle_period:</span> <span class="string">5m</span></span><br><span class="line">  <span class="attr">chunk_retain_period:</span> <span class="string">30s</span></span><br><span class="line"></span><br><span class="line"><span class="comment">#配置索引信息</span></span><br><span class="line"><span class="attr">schema_config:</span></span><br><span class="line">  <span class="attr">configs:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="attr">from:</span> <span class="number">2023-01-01</span></span><br><span class="line">    <span class="attr">store:</span> <span class="string">boltdb</span></span><br><span class="line">    <span class="attr">object_store:</span> <span class="string">filesystem</span></span><br><span class="line">    <span class="attr">schema:</span> <span class="string">v11</span></span><br><span class="line">    <span class="attr">index:</span></span><br><span class="line">      <span class="attr">prefix:</span> <span class="string">index_</span>   <span class="comment">#索引前缀</span></span><br><span class="line">      <span class="attr">period:</span> <span class="string">168h</span>   <span class="comment">#每张表的时间范围7天</span></span><br><span class="line"></span><br><span class="line"><span class="attr">storage_config:</span></span><br><span class="line">  <span class="attr">boltdb:</span></span><br><span class="line">    <span class="attr">directory:</span> <span class="string">/app/new/loki/data/index</span>   <span class="comment">#索引文件存储地址</span></span><br><span class="line">  <span class="attr">filesystem:</span></span><br><span class="line">    <span class="attr">directory:</span> <span class="string">/app/new/loki/data/chunks</span>  <span class="comment">#块存储地址</span></span><br><span class="line"></span><br><span class="line"><span class="attr">compactor:</span></span><br><span class="line">  <span class="attr">working_directory:</span> <span class="string">/app/new/loki/data/compactor</span></span><br><span class="line">  <span class="attr">shared_store:</span> <span class="string">filesystem</span></span><br><span class="line">  <span class="attr">compaction_interval:</span> <span class="string">5m</span></span><br><span class="line">  <span class="attr">retention_enabled:</span> <span class="literal">true</span></span><br><span class="line">  <span class="attr">retention_delete_delay:</span> <span class="string">5m</span> </span><br><span class="line">  <span class="attr">retention_delete_worker_count:</span> <span class="number">150</span></span><br><span class="line"></span><br><span class="line"><span class="attr">limits_config:</span></span><br><span class="line">  <span class="attr">enforce_metric_name:</span> <span class="literal">false</span></span><br><span class="line">  <span class="attr">reject_old_samples:</span> <span class="literal">true</span></span><br><span class="line">  <span class="attr">reject_old_samples_max_age:</span> <span class="string">168h</span></span><br><span class="line">  <span class="comment"># for big logs tune</span></span><br><span class="line">  <span class="attr">cardinality_limit:</span> <span class="number">200000</span></span><br><span class="line">  <span class="attr">ingestion_burst_size_mb:</span> <span class="number">1000</span></span><br><span class="line">  <span class="attr">ingestion_rate_mb:</span> <span class="number">10000</span></span><br><span class="line">  <span class="attr">max_entries_limit_per_query:</span> <span class="number">100000000000</span></span><br><span class="line">  <span class="attr">max_label_value_length:</span> <span class="number">20480</span></span><br><span class="line">  <span class="attr">max_label_name_length:</span> <span class="number">10240</span></span><br><span class="line">  <span class="attr">max_label_names_per_series:</span> <span class="number">300</span></span><br><span class="line">  <span class="attr">split_queries_by_interval:</span> <span class="string">24h</span></span><br><span class="line">  <span class="attr">retention_period:</span> <span class="string">1344h</span></span><br><span class="line">  <span class="attr">max_query_series:</span> <span class="number">2000</span></span><br><span class="line"></span><br><span class="line"><span class="attr">chunk_store_config:</span></span><br><span class="line"><span class="comment"># 最大可查询历史日期 28天,这个时间必须是schema_config中的period的倍数，否则报错。</span></span><br><span class="line">  <span class="attr">max_look_back_period:</span> <span class="string">672h</span></span><br><span class="line"><span class="comment"># 表的保留期28天</span></span><br><span class="line"><span class="attr">table_manager:</span></span><br><span class="line">  <span class="attr">retention_deletes_enabled:</span> <span class="literal">true</span></span><br><span class="line">  <span class="attr">retention_period:</span> <span class="string">672h</span></span><br><span class="line"></span><br><span class="line">[<span class="string">getui@39-210</span> <span class="string">loki</span>]<span class="string">$</span> <span class="string">cat</span> <span class="string">run.sh</span></span><br><span class="line"><span class="comment">#!/bin/bash</span></span><br><span class="line"><span class="string">nohup</span> <span class="string">./loki-linux-amd64</span> <span class="string">-config.file=./config.yaml</span> <span class="string">&gt;</span> <span class="string">/dev/null</span> <span class="number">2</span><span class="string">&gt;&amp;1</span> <span class="string">&amp;</span></span><br></pre></td></tr></table></figure>
+<h3 id="第二步安装-Promtail（采集插件）"><a href="#第二步安装-Promtail（采集插件）" class="headerlink" title="第二步安装 Promtail（采集插件）"></a>第二步安装 Promtail（采集插件）</h3><figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">yum</span> <span class="string">install</span> <span class="string">-y</span> <span class="string">https://github.com/grafana/loki/releases/download/v2.9.8/promtail-2.9.8.x86_64.rpm</span></span><br><span class="line"><span class="comment"># 配置文件详解</span></span><br><span class="line">[<span class="string">getui@bjmjq-service-13-93</span> <span class="string">current</span>]<span class="string">$</span> <span class="string">cat</span> <span class="string">promtail.yaml</span></span><br><span class="line"><span class="attr">server:</span></span><br><span class="line">  <span class="attr">http_listen_port:</span> <span class="number">9081</span></span><br><span class="line">  <span class="attr">grpc_listen_port:</span> <span class="number">19081</span></span><br><span class="line"></span><br><span class="line"><span class="attr">positions:</span></span><br><span class="line">  <span class="attr">filename:</span> <span class="string">./positions.yaml</span>  <span class="comment">#用于记录每次读取日志文件的索引行数，如：promtail重启后从该配置中恢复日志文件的读取位置</span></span><br><span class="line"></span><br><span class="line"><span class="attr">clients:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="attr">url:</span> <span class="string">http://172.16.39.210:3100/loki/api/v1/push</span>   <span class="comment"># 推到Loki</span></span><br><span class="line"></span><br><span class="line"><span class="attr">scrape_configs:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="attr">job_name:</span> <span class="string">ras_exception</span> <span class="comment">#采集模块name</span></span><br><span class="line">    <span class="attr">static_configs:</span></span><br><span class="line">    <span class="bullet">-</span> <span class="attr">targets:</span></span><br><span class="line">        <span class="bullet">-</span> <span class="number">10.10</span><span class="number">.13</span><span class="number">.93</span>  <span class="comment">#采集机器ip</span></span><br><span class="line">    <span class="bullet">-</span> <span class="attr">labels:</span></span><br><span class="line">        <span class="attr">job:</span> <span class="string">ras_exception</span></span><br><span class="line">        <span class="attr">host:</span> <span class="number">10.10</span><span class="number">.13</span><span class="number">.93</span></span><br><span class="line">        <span class="attr">__path__:</span> <span class="string">/app/new/ras/logs/rp-exception*.log</span> <span class="comment">#采集路径</span></span><br><span class="line">    <span class="attr">pipeline_stages:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">match:</span></span><br><span class="line">          <span class="attr">selector:</span> <span class="string">&#x27;&#123;job=&quot;ras_exception&quot;&#125;&#x27;</span></span><br><span class="line">          <span class="attr">stages:</span></span><br><span class="line">            <span class="bullet">-</span> <span class="attr">regex:</span> <span class="comment">#正则匹配</span></span><br><span class="line">                <span class="attr">expression:</span> <span class="string">&quot;^(?P&lt;timestamp&gt;\\d&#123;4&#125;-\\d&#123;2&#125;-\\d&#123;2&#125; \\d&#123;2&#125;:\\d&#123;2&#125;:\\d&#123;2&#125;)\\|(?P&lt;brief&gt;\\w+)\\|(?P&lt;class&gt;\\w+(\\.\\w+|\\$\\w+)*)\\|(?P&lt;reason&gt;.*)\\|(?P&lt;jsonData&gt;.*)\\|(?P&lt;content&gt;.*)\\|(?P&lt;base64&gt;.*)$&quot;</span></span><br><span class="line">            <span class="bullet">-</span> <span class="attr">labels:</span></span><br><span class="line">                <span class="attr">level:</span></span><br><span class="line">            <span class="bullet">-</span> <span class="attr">timestamp:</span></span><br><span class="line">                <span class="attr">format:</span> <span class="string">RFC3339</span></span><br><span class="line">                <span class="attr">location:</span> <span class="string">&#x27;Asia/Shanghai&#x27;</span></span><br><span class="line">                <span class="attr">source:</span> <span class="string">timestamp</span></span><br><span class="line">            <span class="bullet">-</span> <span class="attr">template:</span></span><br><span class="line">                <span class="attr">source:</span> <span class="string">content</span></span><br><span class="line">                <span class="attr">template:</span> <span class="string">&#x27;<span class="template-variable">&#123;&#123;.timestamp&#125;&#125;</span>|<span class="template-variable">&#123;&#123;.brief&#125;&#125;</span>|<span class="template-variable">&#123;&#123;.class&#125;&#125;</span>|<span class="template-variable">&#123;&#123;.reason&#125;&#125;</span>|<span class="template-variable">&#123;&#123;.content&#125;&#125;</span>&#x27;</span></span><br><span class="line">            <span class="bullet">-</span> <span class="attr">output:</span></span><br><span class="line">                <span class="attr">source:</span> <span class="string">content</span></span><br><span class="line">  <span class="bullet">-</span> <span class="attr">job_name:</span> <span class="string">ras_auth_exception</span></span><br><span class="line">    <span class="attr">static_configs:</span></span><br><span class="line">    <span class="bullet">-</span> <span class="attr">targets:</span></span><br><span class="line">        <span class="bullet">-</span> <span class="number">10.10</span><span class="number">.13</span><span class="number">.93</span></span><br><span class="line">    <span class="bullet">-</span> <span class="attr">labels:</span></span><br><span class="line">        <span class="attr">job:</span> <span class="string">ras_auth_exception</span></span><br><span class="line">        <span class="attr">host:</span> <span class="number">10.10</span><span class="number">.13</span><span class="number">.93</span></span><br><span class="line">        <span class="attr">__path__:</span> <span class="string">/app/new/ras/logs/rp-message-*.log</span></span><br><span class="line">    <span class="attr">pipeline_stages:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">match:</span></span><br><span class="line">          <span class="attr">selector:</span> <span class="string">&#x27;&#123;job=&quot;ras_auth_exception&quot;&#125;&#x27;</span></span><br><span class="line">          <span class="attr">stages:</span></span><br><span class="line">            <span class="bullet">-</span> <span class="attr">multiline:</span></span><br><span class="line">                <span class="attr">firstline:</span> <span class="string">&quot;^(\\d&#123;4&#125;-\\d&#123;2&#125;-\\d&#123;2&#125; \\d&#123;2&#125;:\\d&#123;2&#125;:\\d&#123;2&#125;)&quot;</span></span><br><span class="line">                <span class="attr">negate:</span> <span class="literal">true</span></span><br><span class="line">                <span class="attr">match:</span> <span class="string">after</span></span><br><span class="line">            <span class="bullet">-</span> <span class="attr">drop:</span></span><br><span class="line">                <span class="attr">expression:</span> <span class="string">&quot;(no_user|ok|no_valid_push|invalid_param|other_error|ResetMasterSecret|query_cid|push_single|get_tag|no_appid|sign_error|set_tag|get-pushmsg-result|appid_notmatch|bind_alias)&quot;</span></span><br><span class="line"></span><br><span class="line">[<span class="string">getui@13-93</span> <span class="string">current</span>]<span class="string">$</span> <span class="string">cat</span> <span class="string">run.sh</span> </span><br><span class="line"><span class="comment">#!/bin/bash</span></span><br><span class="line"><span class="string">nohup</span> <span class="string">./promtail-linux-amd64</span> <span class="string">-config.file=./promtail.yaml</span> <span class="string">&amp;</span></span><br></pre></td></tr></table></figure>
+<p><a target="_blank" rel="noopener" href="https://mp.weixin.qq.com/s?__biz=MzU4MjQ0MTU4Ng==&mid=2247492144&idx=1&sn=a1cc13a6423fe50173856bfc898e8d77&chksm=fdbaed2dcacd643b0d3e5a8ff66053f3872077faf1c2a0624b9ea5db0eca82a6ff75034080fe&scene=21#wechat_redirect">Promtail Pipeline 日志处理配置</a></p>
+<h4 id="采集nginx日志"><a href="#采集nginx日志" class="headerlink" title="采集nginx日志"></a>采集nginx日志</h4><h5 id="1、尝试搜集nginx日志"><a href="#1、尝试搜集nginx日志" class="headerlink" title="1、尝试搜集nginx日志"></a>1、尝试搜集nginx日志</h5><p>所以首先对nginx默认的日志进行改造，让他以json的方式进行输出到目录，然后用Promtail对其进行读取。<br>读取使用LogQL的json方式去读取，这个LogQL内容填写在grafana中。</p>
+<h5 id="2、nginx的部分配置改造"><a href="#2、nginx的部分配置改造" class="headerlink" title="2、nginx的部分配置改造"></a>2、nginx的部分配置改造</h5><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">server &#123;</span><br><span class="line">    server_name  loki.test.com; # 域名设置</span><br><span class="line">    listen       8888;</span><br><span class="line">    access_log /var/log/nginx/loki_access.log promtail_json;</span><br><span class="line">    location / &#123;</span><br><span class="line">        return 200 &quot;It&#x27;s ok!&quot;;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>promtail_json日志格式配置(nginx.conf)</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">log_format promtail_json &#x27;&#123;&quot;@timestamp&quot;:&quot;$time_iso8601&quot;,&#x27;</span><br><span class="line">        &#x27;&quot;@version&quot;:&quot;Promtail json&quot;,&#x27;</span><br><span class="line">        &#x27;&quot;server_addr&quot;:&quot;$server_addr&quot;,&#x27;</span><br><span class="line">        &#x27;&quot;remote_addr&quot;:&quot;$remote_addr&quot;,&#x27;</span><br><span class="line">        &#x27;&quot;host&quot;:&quot;$host&quot;,&#x27;</span><br><span class="line">        &#x27;&quot;uri&quot;:&quot;$uri&quot;,&#x27;</span><br><span class="line">        &#x27;&quot;body_bytes_sent&quot;:$body_bytes_sent,&#x27;</span><br><span class="line">        &#x27;&quot;bytes_sent&quot;:$body_bytes_sent,&#x27;</span><br><span class="line">        &#x27;&quot;request&quot;:&quot;$request&quot;,&#x27;</span><br><span class="line">        &#x27;&quot;request_length&quot;:$request_length,&#x27;</span><br><span class="line">        &#x27;&quot;request_time&quot;:$request_time,&#x27;</span><br><span class="line">        &#x27;&quot;status&quot;:&quot;$status&quot;,&#x27;</span><br><span class="line">        &#x27;&quot;http_referer&quot;:&quot;$http_referer&quot;,&#x27;</span><br><span class="line">        &#x27;&quot;http_user_agent&quot;:&quot;$http_user_agent&quot;&#x27;</span><br><span class="line">        &#x27;&#125;&#x27;;</span><br></pre></td></tr></table></figure>
+<p>访问127.0.0.1:8888，观察日志已经正常输出为json格式，请保证该json格式正确。</p>
+<figure class="highlight sh"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">root@<span class="built_in">test</span>:/etc/nginx/conf.d<span class="variable">$tail</span> -f /var/log/nginx/loki_access.log </span><br><span class="line">&#123;<span class="string">&quot;@timestamp&quot;</span>:<span class="string">&quot;2024-09-06T01:54:42-05:00&quot;</span>,<span class="string">&quot;@version&quot;</span>:<span class="string">&quot;Promtail json&quot;</span>,<span class="string">&quot;server_addr&quot;</span>:<span class="string">&quot;127.0.0.1&quot;</span>,<span class="string">&quot;remote_addr&quot;</span>:<span class="string">&quot;192.168.65.130&quot;</span>,<span class="string">&quot;host&quot;</span>:<span class="string">&quot;127.0.0.1&quot;</span>,<span class="string">&quot;uri&quot;</span>:<span class="string">&quot;/&quot;</span>,<span class="string">&quot;body_bytes_sent&quot;</span>:8,<span class="string">&quot;bytes_sent&quot;</span>:8,<span class="string">&quot;request&quot;</span>:<span class="string">&quot;GET / HTTP/1.1&quot;</span>,<span class="string">&quot;request_length&quot;</span>:78,<span class="string">&quot;request_time&quot;</span>:0.000,<span class="string">&quot;status&quot;</span>:<span class="string">&quot;200&quot;</span>,<span class="string">&quot;http_referer&quot;</span>:<span class="string">&quot;-&quot;</span>,<span class="string">&quot;http_user_agent&quot;</span>:<span class="string">&quot;curl/7.29.0&quot;</span>&#125;</span><br></pre></td></tr></table></figure>
+<h5 id="3、Promtail配置文件修改"><a href="#3、Promtail配置文件修改" class="headerlink" title="3、Promtail配置文件修改"></a>3、Promtail配置文件修改</h5><p>搜集日志是Promtail处理，所以自然而然是需要根据自己需求来配置Promtail的配置文件。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">server:</span><br><span class="line">  http_listen_port: 9080</span><br><span class="line">  grpc_listen_port: 0</span><br><span class="line"></span><br><span class="line">positions:</span><br><span class="line">  filename: /tmp/loki-positions.yaml  # 记录pos点</span><br><span class="line">  sync_period: 5s # 5s一次将当前读取到的pos点同步至filename配置的文件内</span><br><span class="line"></span><br><span class="line">clients:</span><br><span class="line">  - url: http://localhost:3100/loki/api/v1/push</span><br><span class="line"></span><br><span class="line">scrape_configs:</span><br><span class="line">- job_name: Loki</span><br><span class="line">  static_configs:</span><br><span class="line">  - labels: # 设定的部分标签</span><br><span class="line">     job: Loki-nginx</span><br><span class="line">     host: localhost</span><br><span class="line">     app: nginx</span><br><span class="line">     __path__: /var/log/nginx/loki_access.log # 待读取的nginx日志</span><br></pre></td></tr></table></figure>
+<h5 id="4、LogQL-json部分文档理解"><a href="#4、LogQL-json部分文档理解" class="headerlink" title="4、LogQL json部分文档理解"></a>4、LogQL json部分文档理解</h5><p>json的提取分为两种方式，带参数和不带参数</p>
+<p>####### 不带参数的方式：<br>使用|json来提取日志的json内容，前提是json内容为有效json格式。<br>嵌套的字段会用”_”将内外层的key进行拼接。<br>忽略数组。<br>官网中不带参数方式的样例</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;protocol&quot;</span><span class="punctuation">:</span> <span class="string">&quot;HTTP/2.0&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;servers&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;129.0.1.1&quot;</span><span class="punctuation">,</span><span class="string">&quot;10.2.1.3&quot;</span><span class="punctuation">]</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;request&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">        <span class="attr">&quot;time&quot;</span><span class="punctuation">:</span> <span class="string">&quot;6.032&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;method&quot;</span><span class="punctuation">:</span> <span class="string">&quot;GET&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;host&quot;</span><span class="punctuation">:</span> <span class="string">&quot;foo.grafana.net&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;size&quot;</span><span class="punctuation">:</span> <span class="string">&quot;55&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;headers&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">          <span class="attr">&quot;Accept&quot;</span><span class="punctuation">:</span> <span class="string">&quot;*/*&quot;</span><span class="punctuation">,</span></span><br><span class="line">          <span class="attr">&quot;User-Agent&quot;</span><span class="punctuation">:</span> <span class="string">&quot;curl/7.68.0&quot;</span></span><br><span class="line">        <span class="punctuation">&#125;</span></span><br><span class="line">    <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;response&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">        <span class="attr">&quot;status&quot;</span><span class="punctuation">:</span> <span class="number">401</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;size&quot;</span><span class="punctuation">:</span> <span class="string">&quot;228&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;latency_seconds&quot;</span><span class="punctuation">:</span> <span class="string">&quot;6.031&quot;</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+<p>被json解后，得到如下：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;protocol&quot;</span> =&gt; <span class="string">&quot;HTTP/2.0&quot;</span></span><br><span class="line"><span class="string">&quot;request_time&quot;</span> =&gt; <span class="string">&quot;6.032&quot;</span></span><br><span class="line"><span class="string">&quot;request_method&quot;</span> =&gt; <span class="string">&quot;GET&quot;</span></span><br><span class="line"><span class="string">&quot;request_host&quot;</span> =&gt; <span class="string">&quot;foo.grafana.net&quot;</span></span><br><span class="line"><span class="string">&quot;request_size&quot;</span> =&gt; <span class="string">&quot;55&quot;</span></span><br><span class="line"><span class="string">&quot;response_status&quot;</span> =&gt; <span class="string">&quot;401&quot;</span></span><br><span class="line"><span class="string">&quot;response_size&quot;</span> =&gt; <span class="string">&quot;228&quot;</span></span><br><span class="line"><span class="string">&quot;response_size&quot;</span> =&gt; <span class="string">&quot;228&quot;</span></span><br></pre></td></tr></table></figure>
+<p>从输出能看到，原本request字段内容为嵌套，所以request里面的内容的key验证了如上第二点，使用”_”进行了拼接。同时servers由于是个数组，所以在解析后直接丢弃了servers这个key，验证了第三点。</p>
+<p>####### 带参数的方式:<br>带参数的方式，json只会根据参数来解开需要的部分(当单条json数据比较大的时候应该能省很多资源)。<br>使用| json label&#x3D;”expression”, another&#x3D;”expression”的方式来编写该方法。可以存在多个参数</p>
+<p>看一下官网中带参数方式的样例<br>使用| json first_server&#x3D;”servers[0]”, ua&#x3D;”request.headers[“User-Agent”]进行提取</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;protocol&quot;</span><span class="punctuation">:</span> <span class="string">&quot;HTTP/2.0&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;servers&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;129.0.1.1&quot;</span><span class="punctuation">,</span><span class="string">&quot;10.2.1.3&quot;</span><span class="punctuation">]</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;request&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">        <span class="attr">&quot;time&quot;</span><span class="punctuation">:</span> <span class="string">&quot;6.032&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;method&quot;</span><span class="punctuation">:</span> <span class="string">&quot;GET&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;host&quot;</span><span class="punctuation">:</span> <span class="string">&quot;foo.grafana.net&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;size&quot;</span><span class="punctuation">:</span> <span class="string">&quot;55&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;headers&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">          <span class="attr">&quot;Accept&quot;</span><span class="punctuation">:</span> <span class="string">&quot;*/*&quot;</span><span class="punctuation">,</span></span><br><span class="line">          <span class="attr">&quot;User-Agent&quot;</span><span class="punctuation">:</span> <span class="string">&quot;curl/7.68.0&quot;</span></span><br><span class="line">        <span class="punctuation">&#125;</span></span><br><span class="line">    <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;response&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">        <span class="attr">&quot;status&quot;</span><span class="punctuation">:</span> <span class="number">401</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;size&quot;</span><span class="punctuation">:</span> <span class="string">&quot;228&quot;</span><span class="punctuation">,</span></span><br><span class="line">        <span class="attr">&quot;latency_seconds&quot;</span><span class="punctuation">:</span> <span class="string">&quot;6.031&quot;</span></span><br><span class="line">    <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+<p>输出结果为：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;first_server&quot;</span> =&gt; <span class="string">&quot;129.0.1.1&quot;</span></span><br><span class="line"><span class="string">&quot;ua&quot;</span> =&gt; <span class="string">&quot;curl/7.68.0&quot;</span></span><br></pre></td></tr></table></figure>
+<p>first_server和ua都为原先参数中指定的key</p>
+<p>如果要提取整个对象，可以使用| json server_list&#x3D;”servers”, headers&#x3D;”request.headers 这样就能得到如下输出：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;server_list&quot;</span> =&gt; `<span class="punctuation">[</span><span class="string">&quot;129.0.1.1&quot;</span><span class="punctuation">,</span><span class="string">&quot;10.2.1.3&quot;</span><span class="punctuation">]</span>`</span><br><span class="line"><span class="string">&quot;headers&quot;</span> =&gt; `<span class="punctuation">&#123;</span><span class="attr">&quot;Accept&quot;</span><span class="punctuation">:</span> <span class="string">&quot;*/*&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;User-Agent&quot;</span><span class="punctuation">:</span> <span class="string">&quot;curl/7.68.0&quot;</span><span class="punctuation">&#125;</span>`</span><br></pre></td></tr></table></figure>
+<h5 id="5、尝试写一条LogQL表达式"><a href="#5、尝试写一条LogQL表达式" class="headerlink" title="5、尝试写一条LogQL表达式"></a>5、尝试写一条LogQL表达式</h5><p>一条完整的LogQL表达式由两部分构成：</p>
+<p>a log stream selector，可以理解为，通过设定的label去匹配要抓取哪些日志。<br>a log pipeline，可以理解为表达式。比如json的提取。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">&#123;container=<span class="string">&quot;query-frontend&quot;</span>,namespace=<span class="string">&quot;tempo-dev&quot;</span>&#125; |= <span class="string">&quot;metrics.go&quot;</span> | logfmt | duration &gt; 10s and throughput_mb &lt; 500</span><br></pre></td></tr></table></figure>
+<p>编写一个简单的nginx日志需求<br>Loki-nginx日志中状态码为200的条数。<br>根据当前选定时间范围，自动调整。</p>
+<p>思考：</p>
+<p>如何指定Loki-nginx，可以使用log stream selector的表达式来选定。<br>nginx日志已经转变为了json，所以可以用|json来提取。<br>如何获取status字段的信息? |json后面直接跟随|status即可，即|json|status。<br>如何根据当前选定的时间范围？使用内置变量[$__interval]。<br>条数该得用什么方法获得？LogQL有内置函数count_over_time配合sum，这边需要注意的是count_over_time是根据指定时间范围返回日志条目的具体内容，所以还需要配合sum获得时间段内的总数。<br>编写：</p>
+<p>首先选定Loki-nginx的日志，{job&#x3D;”Loki-nginx”}。<br>使用count_over_time函数配合[$__interval]来获取总共的条数。count_over_time({job&#x3D;”Loki-nginx”}[$__interval])<br>过滤status字段，让其等于200，表达式count_over_time({job&#x3D;”Loki-nginx”} | json | status &#x3D; 200 [$__interval])，此时会报错，因为status为字符串，可以添加__error__&#x3D;””让其忽略转换出现的异常。得到count_over_time({job&#x3D;”Loki-nginx”} | json | status &#x3D; 200 __error__&#x3D;”” [$__interval])<br>此时在grafana上显示为多条数据，配合sum得到单独一个数值。<br>最终的表达式为：sum(count_over_time({job&#x3D;”Loki-nginx”} | json | status &#x3D; 200 <strong>error</strong>&#x3D;”” [$__interval]))</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://blog.wangteng.space">Bingo_Teng</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://blog.wangteng.space/post/009.html">https://blog.wangteng.space/post/009.html</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来自 <a href="https://blog.wangteng.space" target="_blank">Bingo大侠</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/Loki/">Loki</a></div><div class="post_share"><div class="social-share" data-image="https://image.wangteng.space/image/202409061423300loki.jpeg" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.3/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.3/sharejs/dist/js/social-share.min.js" defer></script></div></div><div class="post-reward"><div class="reward-button"><i class="fas fa-qrcode"></i>赞助</div><div class="reward-main"><ul class="reward-all"><li class="reward-item"><a href="https://image.wangteng.space/image/wechat.jpg" target="_blank"><img class="post-qr-code-img" src="https://image.wangteng.space/image/wechat.jpg" alt="wechat"/></a><div class="post-qr-code-desc">wechat</div></li><li class="reward-item"><a href="https://image.wangteng.space/image/alipay.jpg" target="_blank"><img class="post-qr-code-img" src="https://image.wangteng.space/image/alipay.jpg" alt="alipay"/></a><div class="post-qr-code-desc">alipay</div></li></ul></div></div><nav class="pagination-post" id="pagination"><div class="next-post pull-full"><a href="/post/008.html" title="VictoriaMetrics存储机制"><img class="cover" src="https://image.wangteng.space/image/202408291002829vm.webp" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="pagination-info"><div class="label">下一篇</div><div class="next_info">VictoriaMetrics存储机制</div></div></a></div></nav><hr class="custom-hr"/><div id="post-comment"><div class="comment-head"><div class="comment-headline"><i class="fas fa-comments fa-fw"></i><span> 评论</span></div></div><div class="comment-wrap"><div><div id="twikoo-wrap"></div></div></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info"><div class="is-center"><div class="avatar-img"><img src="https://image.wangteng.space/image/202408021453686.jpg" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info__name">Bingo_Teng</div><div class="author-info__description">2024年的理想开始实现了吗？</div></div><div class="card-info-data site-data is-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">9</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">8</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">5</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/wangteng0906"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons is-center"><a class="social-icon" href="https://github.com/wangteng0906" target="_blank" title="Github"><i class="fab fa-github" style="color: #24292e;"></i></a><a class="social-icon" href="mailto:1364695199@qq.com" target="_blank" title="Email"><i class="fas fa-envelope" style="color: #4a7dbe;"></i></a><a class="social-icon" href="/1364695199" target="_blank" title="QQ"><i class="fa-brands fa-qq" style="color: #2c9678;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">如果阅读过程中遇到了问题，请及时评论或者留言，看到了会在第一时间给出回复。</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81loki%E7%AE%80%E4%BB%8B"><span class="toc-number">1.</span> <span class="toc-text">一、loki简介</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81Loki-%E5%BF%AB%E9%80%9F%E4%B8%8A%E6%89%8B"><span class="toc-number">2.</span> <span class="toc-text">二、Loki 快速上手</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%84%E6%97%A5%E5%BF%97%E6%94%B6%E9%9B%86%E7%BB%84%E4%BB%B6%E7%AE%80%E5%8D%95%E5%AF%B9%E6%AF%94"><span class="toc-number">2.1.</span> <span class="toc-text">各日志收集组件简单对比</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AC%AC%E4%B8%80%E6%AD%A5%E5%AE%89%E8%A3%85-Loki"><span class="toc-number">2.2.</span> <span class="toc-text">第一步安装 Loki</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AC%AC%E4%BA%8C%E6%AD%A5%E5%AE%89%E8%A3%85-Promtail%EF%BC%88%E9%87%87%E9%9B%86%E6%8F%92%E4%BB%B6%EF%BC%89"><span class="toc-number">2.3.</span> <span class="toc-text">第二步安装 Promtail（采集插件）</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E9%87%87%E9%9B%86nginx%E6%97%A5%E5%BF%97"><span class="toc-number">2.3.1.</span> <span class="toc-text">采集nginx日志</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#1%E3%80%81%E5%B0%9D%E8%AF%95%E6%90%9C%E9%9B%86nginx%E6%97%A5%E5%BF%97"><span class="toc-number">2.3.1.1.</span> <span class="toc-text">1、尝试搜集nginx日志</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#2%E3%80%81nginx%E7%9A%84%E9%83%A8%E5%88%86%E9%85%8D%E7%BD%AE%E6%94%B9%E9%80%A0"><span class="toc-number">2.3.1.2.</span> <span class="toc-text">2、nginx的部分配置改造</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#3%E3%80%81Promtail%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6%E4%BF%AE%E6%94%B9"><span class="toc-number">2.3.1.3.</span> <span class="toc-text">3、Promtail配置文件修改</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#4%E3%80%81LogQL-json%E9%83%A8%E5%88%86%E6%96%87%E6%A1%A3%E7%90%86%E8%A7%A3"><span class="toc-number">2.3.1.4.</span> <span class="toc-text">4、LogQL json部分文档理解</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#5%E3%80%81%E5%B0%9D%E8%AF%95%E5%86%99%E4%B8%80%E6%9D%A1LogQL%E8%A1%A8%E8%BE%BE%E5%BC%8F"><span class="toc-number">2.3.1.5.</span> <span class="toc-text">5、尝试写一条LogQL表达式</span></a></li></ol></li></ol></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/post/009.html" title="日志系统新秀-Loki"><img src="https://image.wangteng.space/image/202409061423300loki.jpeg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="日志系统新秀-Loki"/></a><div class="content"><a class="title" href="/post/009.html" title="日志系统新秀-Loki">日志系统新秀-Loki</a><time datetime="2024-08-30T02:58:47.230Z" title="发表于 2024-08-30 10:58:47">2024-08-30</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/post/008.html" title="VictoriaMetrics存储机制"><img src="https://image.wangteng.space/image/202408291002829vm.webp" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="VictoriaMetrics存储机制"/></a><div class="content"><a class="title" href="/post/008.html" title="VictoriaMetrics存储机制">VictoriaMetrics存储机制</a><time datetime="2024-08-29T01:52:42.769Z" title="发表于 2024-08-29 09:52:42">2024-08-29</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/post/007.html" title="Pulsar的消息保留和过期策略"><img src="https://image.wangteng.space/image/202408021649982.jpeg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Pulsar的消息保留和过期策略"/></a><div class="content"><a class="title" href="/post/007.html" title="Pulsar的消息保留和过期策略">Pulsar的消息保留和过期策略</a><time datetime="2024-07-18T07:18:53.630Z" title="发表于 2024-07-18 15:18:53">2024-07-18</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/post/006.html" title="Nginx之localtion规则与地址重写（超详细实例篇）"><img src="https://image.wangteng.space/image/202408021648933.jpeg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Nginx之localtion规则与地址重写（超详细实例篇）"/></a><div class="content"><a class="title" href="/post/006.html" title="Nginx之localtion规则与地址重写（超详细实例篇）">Nginx之localtion规则与地址重写（超详细实例篇）</a><time datetime="2024-07-09T09:08:49.342Z" title="发表于 2024-07-09 17:08:49">2024-07-09</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/post/005.html" title="Centos7上PXE服务器的搭建部署"><img src="https://image.wangteng.space/image/202408021647669.jpg" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="Centos7上PXE服务器的搭建部署"/></a><div class="content"><a class="title" href="/post/005.html" title="Centos7上PXE服务器的搭建部署">Centos7上PXE服务器的搭建部署</a><time datetime="2024-07-05T09:36:48.016Z" title="发表于 2024-07-05 17:36:48">2024-07-05</time></div></div></div></div></div></div></main><footer id="footer"><div id="footer-wrap"><div id="ft"><div class="ft-item-1"><div class="t-top"><div class="t-t-l"><p class="ft-t t-l-t">御剑-</p><div class="bg-ad"><div>希望其实就在每个人心里，一个乐观的人，即使在失意灰暗的日子里，也能在黑暗中看到希望的光亮；一个悲观的人，即使是在一片大好的境况中，也担心会有无数的艰难险阻，阻拦在通向成功的路上。</div><div class="btn-xz-box"><a class="btn-xz" target="_blank" rel="noopener" href="https://home.wangteng.space">大侠的港湾</a></div></div></div><div class="t-t-r"><p class="ft-t t-l-t">修仙导航</p><ul class="ft-links"><li><a href="https://blog.wangteng.space/articles/hexo1600/">建站指南</a><a href="https://blog.wangteng.space/nav.html">网址导航</a></li><li><a href="https://blog.wangteng.space/sponsorWall/">来杯咖啡</a><a href="https://blog.wangteng.space/comments/">留点什么</a></li><li><a href="https://blog.wangteng.space/about/">关于博主</a><a href="https://blog.wangteng.space/archives/">文章归档</a></li><li><a href="https://blog.wangteng.space/categories/">文章分类</a><a href="https://blog.wangteng.space/tags/">文章标签</a></li><li><a href="https://blog.wangteng.space/Gallery/">我的相册</a><a href="https://blog.wangteng.space/bangumis/">我的追番</a></li><li><a href="https://blog.wangteng.space/specialEffects/">一些特效</a><a href="https://blog.wangteng.space/wallpaper/">一些壁纸</a></li></ul></div></div></div><div class="ft-item-2"><p class="ft-t">推荐友链</p><div class="ft-img-group"><div class="img-group-item"><a href="https://blog.wangteng.space/"><img src="https://image.wangteng.space/image/202408021453686.jpg" alt=""/></a></div><div class="img-group-item"><a target="_blank" rel="noopener" href="https://fe32.top/"><img src="https://bu.dusays.com/2022/05/02/626f92e193879.jpg" alt=""/></a></div><div class="img-group-item"><a target="_blank" rel="noopener" href="https://blog.anheyu.com/"><img src="https://npm.elemecdn.com/anzhiyu-blog-static@1.0.4/img/avatar.jpg" alt=""/></a></div><div class="img-group-item"><a target="_blank" rel="noopener" href="https://dusays.com/"><img src="https://cdn.dusays.com/avatar.png" alt=""/></a></div><div class="img-group-item"><a target="_blank" rel="noopener" href="https://www.yt-blog.top/9952/"><img src="https://bu.dusays.com/2024/01/26/65b2f4daaaf4c.webp" alt=""/></a></div><div class="img-group-item"><a target="_blank" rel="noopener" href="https://butterfly.js.org/"><img src="https://butterfly.js.org/img/avatar.png" alt=""/></a></div><div class="img-group-item"><a target="_blank" rel="noopener" href="https://www.fomal.cc/"><img src="https://sourcebucket.s3.bitiful.net/img/avatar.webp" alt=""/></a></div><div class="img-group-item"><a target="_blank" rel="noopener" href="https://blog.zhheo.com/"><img src="https://blog.zhheo.com/img/pwa/144.webp" alt=""/></a></div></div></div></div><div class="copyright"><a target="_blank" href="https://www.upyun.com/?utm_source=lianmeng&utm_medium=referral"><img style="position:relative;top:-1px;" src="https://npm.elemecdn.com/lql_static@latest/upyun/logo.png" data-lazy-src="https://npm.elemecdn.com/lql_static@latest/upyun/logo.png" align="absmiddle" width="60px" height="30px" data-ll-status="loaded" class="entered loaded"</a></a>&nbsp&nbsp&nbsp&nbsp;<a target="_blank" href="https://beian.mps.gov.cn/#/query/webSearch?code=61052402610640"><img style="position:relative;top:-1px;" src="https://image.wangteng.space/image/beianlogo.png" data-lazy-src="https://image.wangteng.space/image/beianlogo.png" align="absmiddle" width="16px" height="16px" data-ll-status="loaded" class="entered loaded"</a>&nbsp;<a target="_blank" href="https://beian.mps.gov.cn/#/query/webSearch?code=61052402610640">陕公网安备61052402610640</a>&nbsp&nbsp&nbsp&nbsp;<a target="_blank" href="https://beian.miit.gov.cn/">陕ICP备2024042922号</a>&nbsp&nbsp&nbsp&nbsp&copy;2024  <i id="heartbeat" class="fa fas fa-heartbeat"></i> Bingo_Teng</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="浅色和深色模式转换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><a id="to_comment" href="#post-comment" title="直达评论"><i class="fas fa-comments"></i></a><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=4.14.0-b3"></script><script src="/js/main.js?v=4.14.0-b3"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@5.0.35/dist/fancybox/fancybox.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/instant.page@5.2.0/instantpage.min.js" type="module"></script><div class="js-pjax"><script>(() => {
+  const runMermaid = (ele) => {
+    window.loadMermaid = true
+    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default'
+
+    Array.from(ele).forEach((item, index) => {
+      const mermaidSrc = item.firstElementChild
+      const mermaidThemeConfig = '%%{init:{ \'theme\':\'' + theme + '\'}}%%\n'
+      const mermaidID = 'mermaid-' + index
+      const mermaidDefinition = mermaidThemeConfig + mermaidSrc.textContent
+
+      const renderFn = mermaid.render(mermaidID, mermaidDefinition)
+
+      const renderV10 = () => {
+        renderFn.then(({svg}) => {
+          mermaidSrc.insertAdjacentHTML('afterend', svg)
+        })
+      }
+
+      const renderV9 = svg => {
+        mermaidSrc.insertAdjacentHTML('afterend', svg)
+      }
+
+      typeof renderFn === 'string' ? renderV9(renderFn) : renderV10()
+    })
+  }
+
+  const codeToMermaid = () => {
+    const codeMermaidEle = document.querySelectorAll('pre > code.mermaid')
+    if (codeMermaidEle.length === 0) return
+    
+    codeMermaidEle.forEach(ele => {
+      const newEle = document.createElement('div')
+      newEle.className = 'mermaid-wrap'
+      newEle.innerHTML = `<pre class="mermaid-src" hidden>${ele.textContent}</pre>`
+      ele.parentNode.replaceWith(newEle)
+    })
+  }
+
+  const loadMermaid = () => {
+    if (false) codeToMermaid()
+    const $mermaid = document.querySelectorAll('#article-container .mermaid-wrap')
+    if ($mermaid.length === 0) return
+
+    const runMermaidFn = () => runMermaid($mermaid)
+    btf.addGlobalFn('themeChange', runMermaidFn, 'mermaid')
+    window.loadMermaid ? runMermaidFn() : btf.getScript('https://cdn.jsdelivr.net/npm/mermaid@10.9.0/dist/mermaid.min.js').then(runMermaidFn)
+  }
+  
+  btf.addGlobalFn('encrypt', loadMermaid, 'mermaid')
+  window.pjax ? loadMermaid() : document.addEventListener('DOMContentLoaded', loadMermaid)
+})()</script><script>(() => {
+  const getCount = () => {
+    const countELement = document.getElementById('twikoo-count')
+    if(!countELement) return
+    twikoo.getCommentsCount({
+      envId: 'https://twikoo.wangteng.space/',
+      region: '',
+      urls: [window.location.pathname],
+      includeReply: false
+    }).then(res => {
+      countELement.textContent = res[0].count
+    }).catch(err => {
+      console.error(err)
+    })
+  }
+
+  const init = () => {
+    twikoo.init(Object.assign({
+      el: '#twikoo-wrap',
+      envId: 'https://twikoo.wangteng.space/',
+      region: '',
+      onCommentLoaded: () => {
+        btf.loadLightbox(document.querySelectorAll('#twikoo .tk-content img:not(.tk-owo-emotion)'))
+      }
+    }, null))
+
+    GLOBAL_CONFIG_SITE.isPost && getCount()
+  }
+
+  const loadTwikoo = () => {
+    if (typeof twikoo === 'object') setTimeout(init,0)
+    else btf.getScript('https://cdn.jsdelivr.net/npm/twikoo@1.6.32/dist/twikoo.all.min.js').then(init)
+  }
+
+  if ('Twikoo' === 'Twikoo' || !true) {
+    if (true) btf.loadComment(document.getElementById('twikoo-wrap'), loadTwikoo)
+    else loadTwikoo()
+  } else {
+    window.loadOtherComment = loadTwikoo
+  }
+})()</script></div><script>window.addEventListener('load', () => {
+  const changeContent = (content) => {
+    if (content === '') return content
+
+    content = content.replace(/<img.*?src="(.*?)"?[^\>]+>/ig, '[图片]') // replace image link
+    content = content.replace(/<a[^>]+?href=["']?([^"']+)["']?[^>]*>([^<]+)<\/a>/gi, '[链接]') // replace url
+    content = content.replace(/<pre><code>.*?<\/pre>/gi, '[代码]') // replace code
+    content = content.replace(/<[^>]+>/g,"") // remove html tag
+
+    if (content.length > 150) {
+      content = content.substring(0,150) + '...'
+    }
+    return content
+  }
+
+  const getComment = () => {
+    const runTwikoo = () => {
+      twikoo.getRecentComments({
+        envId: 'https://twikoo.wangteng.space/',
+        region: '',
+        pageSize: 6,
+        includeReply: true
+      }).then(function (res) {
+        const twikooArray = res.map(e => {
+          return {
+            'content': changeContent(e.comment),
+            'avatar': e.avatar,
+            'nick': e.nick,
+            'url': e.url + '#' + e.id,
+            'date': new Date(e.created).toISOString()
+          }
+        })
+
+        btf.saveToLocal.set('twikoo-newest-comments', JSON.stringify(twikooArray), 10/(60*24))
+        generateHtml(twikooArray)
+      }).catch(function (err) {
+        const $dom = document.querySelector('#card-newest-comments .aside-list')
+        $dom.textContent= "无法获取评论，请确认相关配置是否正确"
+      })
+    }
+
+    if (typeof twikoo === 'object') {
+      runTwikoo()
+    } else {
+      btf.getScript('https://cdn.jsdelivr.net/npm/twikoo@1.6.32/dist/twikoo.all.min.js').then(runTwikoo)
+    }
+  }
+
+  const generateHtml = array => {
+    let result = ''
+
+    if (array.length) {
+      for (let i = 0; i < array.length; i++) {
+        result += '<div class=\'aside-list-item\'>'
+
+        if (true) {
+          const name = 'src'
+          result += `<a href='${array[i].url}' class='thumbnail'><img ${name}='${array[i].avatar}' alt='${array[i].nick}'></a>`
+        }
+        
+        result += `<div class='content'>
+        <a class='comment' href='${array[i].url}' title='${array[i].content}'>${array[i].content}</a>
+        <div class='name'><span>${array[i].nick} / </span><time datetime="${array[i].date}">${btf.diffDate(array[i].date, true)}</time></div>
+        </div></div>`
+      }
+    } else {
+      result += '没有评论'
+    }
+
+    let $dom = document.querySelector('#card-newest-comments .aside-list')
+    $dom && ($dom.innerHTML= result)
+    window.lazyLoadInstance && window.lazyLoadInstance.update()
+    window.pjax && window.pjax.refresh($dom)
+  }
+
+  const newestCommentInit = () => {
+    if (document.querySelector('#card-newest-comments .aside-list')) {
+      const data = btf.saveToLocal.get('twikoo-newest-comments')
+      if (data) {
+        generateHtml(JSON.parse(data))
+      } else {
+        getComment()
+      }
+    }
+  }
+
+  newestCommentInit()
+  btf.addGlobalFn('pjaxComplete', newestCommentInit, 'twikoo_newestComment')
+})</script><div class="aplayer no-destroy" data-id="12267287378" data-server="netease" data-type="playlist" data-fixed="true" data-autoplay="false" data-lrcType="-1"> </div><script src="/js/custom.js"></script><script defer="defer" id="fluttering_ribbon" mobile="true" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.3/dist/canvas-fluttering-ribbon.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.3/dist/activate-power-mode.min.js"></script><script>POWERMODE.colorful = true;
+POWERMODE.shake = false;
+POWERMODE.mobile = false;
+document.body.addEventListener('input', POWERMODE);
+</script><script id="click-heart" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.3/dist/click-heart.min.js" async="async" mobile="true"></script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.3/metingjs/dist/Meting.min.js"></script><script>(() => {
+  const destroyAplayer = () => {
+    if (window.aplayers) {
+      for (let i = 0; i < window.aplayers.length; i++) {
+        if (!window.aplayers[i].options.fixed) {
+          window.aplayers[i].destroy()
+        }
+      }
+    }
+  }
+
+  const loadMeting = () => {
+    typeof loadMeting === 'function' && document.getElementsByClassName('aplayer').length && loadMeting()
+  }
+
+  btf.addGlobalFn('pjaxSend', destroyAplayer, 'destroyAplayer')
+  btf.addGlobalFn('pjaxComplete', loadMeting, 'loadMeting')
+})()</script><script src="https://cdn.jsdelivr.net/npm/pjax@0.2.8/pjax.min.js"></script><script>let pjaxSelectors = ["head > title","#config-diff","#body-wrap","#rightside-config-hide","#rightside-config-show",".js-pjax"]
+
+var pjax = new Pjax({
+  elements: 'a:not([target="_blank"]):not([href="/music/"]):not([href="/Gallery/wallpaper"]):not([href="/Gallery/marvel"]):not([href="/no-pjax/"])',
+  selectors: pjaxSelectors,
+  cacheBust: false,
+  analytics: false,
+  scrollRestoration: false
+})
+
+const triggerPjaxFn = (val) => {
+  if (!val) return
+  Object.values(val).forEach(fn => { fn() })
+}
+
+document.addEventListener('pjax:send', function () {
+
+  // removeEventListener
+  btf.removeGlobalFnEvent('pjax')
+  btf.removeGlobalFnEvent('themeChange')
+
+  //reset readmode
+  const $bodyClassList = document.body.classList
+  $bodyClassList.contains('read-mode') && $bodyClassList.remove('read-mode')
+
+  triggerPjaxFn(window.globalFn.pjaxSend)
+})
+
+document.addEventListener('pjax:complete', () => {
+  document.querySelectorAll('script[data-pjax]').forEach(item => {
+    const newScript = document.createElement('script')
+    const content = item.text || item.textContent || item.innerHTML || ""
+    Array.from(item.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value))
+    newScript.appendChild(document.createTextNode(content))
+    item.parentNode.replaceChild(newScript, item)
+  })
+
+  triggerPjaxFn(window.globalFn.pjaxComplete)
+})
+
+document.addEventListener('pjax:error', e => {
+  if (e.request.status === 404) {
+    pjax.loadUrl('/404.html')
+  }
+})</script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="algolia-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="search-wrap"><div id="algolia-search-input"></div><hr/><div id="algolia-search-results"><div id="algolia-hits"></div><div id="algolia-pagination"></div><div id="algolia-info"><div class="algolia-stats"></div><div class="algolia-poweredBy"></div></div></div></div></div><div id="search-mask"></div><script src="https://cdn.jsdelivr.net/npm/algoliasearch@4.23.2/dist/algoliasearch-lite.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/instantsearch.js@4.66.1/dist/instantsearch.production.min.js"></script><script src="/js/search/algolia.js?v=4.14.0-b3"></script></div></div></body></html>
